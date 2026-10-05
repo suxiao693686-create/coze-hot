@@ -29,6 +29,10 @@ def tri(f, d): p = (tt(d) * f) % 1; return 4 * np.abs(p - 0.5) - 1
 def noise(d): return rng.uniform(-1, 1, int(d * SR))
 def lp(x, k): return lfilter([k], [1, k - 1], x)
 def hp(x, k): return x - lp(x, k)
+def mixs(*xs):   # 不同长度的声音相加
+    out = np.zeros(max(len(x) for x in xs))
+    for x in xs: out[:len(x)] += x
+    return out
 
 # ---------- 背景音乐：轻快循环（112 BPM），只做伴奏不抢人声 ----------
 BEAT = 60 / 112; E8 = BEAT / 2
@@ -46,8 +50,8 @@ while t < DUR:
 # ---------- 音效 ----------
 def click(): d = 0.012; return np.sin(2 * np.pi * rng.uniform(2500, 5000) * tt(d)) * env(d, 0.0005, 0.012)
 def S_pop():   return np.sin(sweep(500, 1400, 0.07)) * env(0.07, 0.001)
-def S_thud():  return np.sin(sweep(120, 45, 0.25)) * env(0.25, 0.001, 0.3) + lp(noise(0.08), 0.3) * env(0.08, 0.001) * 0.5
-def S_stamp(): return np.sin(sweep(110, 45, 0.35)) * env(0.35, 0.001, 0.4) + lp(noise(0.2), 0.4) * env(0.2, 0.001) * 0.6
+def S_thud():  return mixs(np.sin(sweep(120, 45, 0.25)) * env(0.25, 0.001, 0.3), lp(noise(0.08), 0.3) * env(0.08, 0.001) * 0.5)
+def S_stamp(): return mixs(np.sin(sweep(110, 45, 0.35)) * env(0.35, 0.001, 0.4), lp(noise(0.2), 0.4) * env(0.2, 0.001) * 0.6)
 def S_crack():
     s = np.zeros(int(0.3 * SR))
     for k in range(6): b = hp(noise(0.03), 0.5) * env(0.03, 0.0005); o = int(k * 0.04 * SR); s[o:o + len(b)] += b * (1 - k * 0.12)
@@ -65,7 +69,7 @@ def S_clink(): return sum(np.sin(2 * np.pi * f * tt(0.25)) for f in (2600, 3900,
 def S_poof(): return lp(noise(0.4), 0.15) * env(0.4, 0.01, 0.3) * 2
 def S_clank(): d = 0.3; return sum(np.sin(2 * np.pi * f * tt(d)) for f in (1180, 1730, 2540, 3390)) / 4 * env(d, 0.001, 0.25)
 def S_boing(): return np.sign(np.sin(sweep(200, 600, 0.25) + 3 * np.sin(2 * np.pi * 12 * tt(0.25)))) * env(0.25) * 0.4
-def S_bonk(): return np.sin(sweep(300, 120, 0.2)) * env(0.2, 0.001) + S_clank()[:int(0.2 * SR)] * 0.4
+def S_bonk(): return mixs(np.sin(sweep(300, 120, 0.2)) * env(0.2, 0.001), S_clank()[:int(0.2 * SR)] * 0.4)
 def S_machine(): d = 1.2; x = np.sign(np.sin(2 * np.pi * 55 * tt(d))) * 0.3 + lp(noise(d), 0.1); return x * np.sin(np.pi * tt(d) / d) * 0.6
 def S_water(): d = 0.8; n = noise(d); return (hp(lp(n, 0.3), 0.08) * (0.6 + 0.4 * np.sin(2 * np.pi * 9 * tt(d)))) * np.sin(np.pi * tt(d) / d) * 1.5
 def S_cut():
