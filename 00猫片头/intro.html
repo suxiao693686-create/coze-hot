@@ -421,18 +421,18 @@ function subtitle(g, text) {
 function catState(t) {
   const FLOOR = 1440, S = 16;
   let y = FLOOR, pose = { eyes: 'open', mouth: 'smile' };
-  if (t < 1.1) {
-    const up = easeOut(seg(t, 0.1, 0.35)) * (1 - easeIn(seg(t, 0.95, 1.1)));
-    const lick = t > 0.3 && t < 1.0 && Math.floor(t * 7) % 2 === 0;
-    pose = { eyes: t > 0.25 && t < 1.0 ? 'happy' : 'open', mouth: lick ? 'tongue' : 'smile',
+  if (t < 0.95) {
+    const up = easeOut(seg(t, 0.1, 0.35)) * (1 - easeIn(seg(t, 0.8, 0.95)));
+    const lick = t > 0.3 && t < 0.85 && Math.floor(t * 7) % 2 === 0;
+    pose = { eyes: t > 0.25 && t < 0.85 ? 'happy' : 'open', mouth: lick ? 'tongue' : 'smile',
       armL: [up * 8.5, up * -9 + (lick ? 0.6 : 0)], headDx: up * 0.6, headDy: up * 0.4 };
-  } else if (t < 1.4) {
-    pose = { eyes: 'open', lookUp: true, mouth: 'smile', earL: -1, earR: -1 };
-  } else if (t < 1.55) {
-    const k = seg(t, 1.4, 1.55);
+  } else if (t < 1.38) {
+    pose = { eyes: 'open', lookUp: true, mouth: t > 1.0 && t < 1.35 && Math.floor(t * 10) % 2 === 0 ? 'open' : 'smile', earL: -1, earR: -1 };
+  } else if (t < 1.45) {
+    const k = seg(t, 1.38, 1.45);
     pose = { eyes: 'open', lookUp: true, sx: 1 + 0.12 * k, sy: 1 - 0.14 * k };
-  } else if (t < 1.75) {
-    const k = easeOut(seg(t, 1.55, 1.75));
+  } else if (t < 1.65) {
+    const k = easeOut(seg(t, 1.45, 1.65));
     y = lerp(FLOOR, 1312, k);
     pose = { eyes: 'open', lookUp: true, armsUp: true, sx: 0.92, sy: 1.1, earL: 1, earR: 1 };
   } else if (t < 2.1) {
@@ -446,9 +446,9 @@ function catState(t) {
   } else {
     const beat = ((t - T_OPEN) / 0.4) % 1;
     y = FLOOR - Math.sin(beat * Math.PI) * 14;
-    const talking = t > 2.6 && t < 4.76;
+    const talking = t > 2.52 && t < 4.72;
     const blink = t > 3.6 && t < 3.7;
-    pose = { eyes: blink ? 'blink' : (t > 2.95 && t < 3.25 ? 'happy' : 'open'),
+    pose = { eyes: blink ? 'blink' : (t > 2.85 && t < 3.15 ? 'happy' : 'open'),
       mouth: talking && Math.floor(t * 9) % 2 === 0 ? 'open' : 'smile',
       armR: [-1.5, -10 + Math.sin(t * 16) * 2.5], armL: [0, Math.sin(beat * Math.PI) * -1] };
   }
@@ -456,8 +456,8 @@ function catState(t) {
   return { x: 540, y, S, pose };
 }
 function handleY(t) {
-  if (t < 1.75) return 640;
-  if (t < 2.05) return lerp(640, 760, easeInOut(seg(t, 1.75, 2.05)));
+  if (t < 1.65) return 640;
+  if (t < 2.05) return lerp(640, 760, easeInOut(seg(t, 1.65, 2.05)));
   return lerp(760, -200, easeIn(seg(t, 2.1, 2.55)));
 }
 
@@ -473,7 +473,7 @@ function render(t) {
   // camera shake
   let shake = 0;
   shake += 22 * Math.max(0, 1 - (t - T_OPEN) / 0.35) * (t >= T_OPEN ? 1 : 0);
-  shake += 16 * Math.max(0, 1 - (t - 2.95) / 0.25) * (t >= 2.95 ? 1 : 0);
+  shake += 16 * Math.max(0, 1 - (t - 2.85) / 0.25) * (t >= 2.85 ? 1 : 0);
   const R = rng(Math.floor(t * 60) + 1);
   ctx.translate((R() - 0.5) * shake, (R() - 0.5) * shake);
 
@@ -497,22 +497,23 @@ function render(t) {
   }
 
   // titles
-  if (t > 2.6) {
-    const s1 = easeOutBack(seg(t, 2.6, 2.85));
-    const bob = Math.sin((t - 2.6) * 5) * 6;
+  if (t > 2.45) {
+    const pulse = 1 + 0.05 * Math.exp(-(((t - T_OPEN) % 0.4)) * 12);
+    const s1 = easeOutBack(seg(t, 2.45, 2.65)) * pulse;
+    const bob = Math.sin((t - 2.45) * 5) * 6;
     drawCentered(ctx, pixelText('00猫', 46, 8, C.cream), 540, 330 + bob, s1, Math.sin(t * 3) * 0.02);
-    const k2 = easeOutBack(seg(t, 2.75, 3.0));
+    const k2 = easeOutBack(seg(t, 2.65, 2.85));
     if (k2 > 0) {
-      ctx.save(); ctx.translate(lerp(-600, 540, k2), 545);
+      ctx.save(); ctx.translate(lerp(-600, 540, k2), 545); ctx.scale(pulse, pulse);
       ctx.fillStyle = C.outline; ctx.fillRect(-380, -78, 760, 156);
       ctx.fillStyle = C.blue; ctx.fillRect(-370, -68, 740, 136);
       ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(-370, -68, 740, 18);
       drawCentered(ctx, pixelText('塑料小课堂', 30, 5, '#ffffff'), 0, 0);
       ctx.restore();
     }
-    const k3 = seg(t, 2.95, 3.12);
+    const k3 = seg(t, 2.85, 3.0);
     if (k3 > 0) {
-      const s3 = lerp(3, 1, easeOut(k3));
+      const s3 = lerp(3, 1, easeOut(k3)) * (k3 >= 1 ? pulse : 1);
       ctx.save(); ctx.translate(560, 715); ctx.rotate(-0.06); ctx.scale(s3, s3); ctx.globalAlpha = clamp(k3 * 2);
       ctx.fillStyle = C.outline; ctx.fillRect(-300, -66, 600, 132);
       ctx.fillStyle = C.red; ctx.fillRect(-290, -56, 580, 112);
@@ -538,8 +539,8 @@ function render(t) {
   drawCat(ctx, cat.x, cat.y, cat.S, cat.pose);
 
   // "!" bubble
-  if (t > 1.12 && t < 1.55) {
-    const s = easeOutBack(seg(t, 1.12, 1.25));
+  if (t > 1.0 && t < 1.45) {
+    const s = easeOutBack(seg(t, 1.0, 1.1));
     ctx.save(); ctx.translate(800, 760); ctx.scale(s, s);
     ctx.fillStyle = C.outline; ctx.fillRect(-48, -66, 96, 120); ctx.fillRect(-12, 54, 24, 24);
     ctx.fillStyle = '#fff'; ctx.fillRect(-40, -58, 80, 104);
@@ -557,8 +558,9 @@ function render(t) {
   }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (t > 1.75 && t < 2.35) subtitle(ctx, '开模！');
-  if (t > 2.6 && t < 4.8) subtitle(ctx, '00猫塑料小课堂，开课啦！');
+  if (t > 1.0 && t < 1.45) subtitle(ctx, '喵喵！');
+  if (t > 1.45 && t < 2.3) subtitle(ctx, '开模！');
+  if (t > 2.5 && t < 4.75) subtitle(ctx, '00猫塑料小课堂，开课啦！');
   drawWipe(ctx, t);
 }
 
