@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>00猫片头</title>
+<style>
+  html, body { margin: 0; background: #222; }
+  canvas { display: block; margin: 0 auto; max-height: 100vh; width: auto; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+// ===== 每期要改的就这里 =====
+const CONFIG = {
+  lessonNo: '第01课',
+  lessonTitle: '什么是改性塑料？',
+};
+// ===========================
+
+const W = 1080, H = 1920, DURATION = 6.2;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const FONT = '"WenQuanYi Zen Hei", "PingFang SC", "Microsoft YaHei", sans-serif';
+
+const C = {
+  outline: '#4a2518', cream: '#fdfbee', shade: '#d3d1cc', shade2: '#efe9d2',
+  pinkEar: '#f6b08f', nose: '#f6c3ac', eye: '#111111', mouthIn: '#7a1f24', tongue: '#ff8a8a',
+  steel1: '#8693a2', steel2: '#5a6574', steelDark: '#3d4651', steelLight: '#b4bfcc',
+  blue: '#2f6fde', orange: '#ff8a3d', red: '#e8432f', yellow: '#ffd54a',
+};
+
+// ---------- helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const easeIn = k => k * k * k;
+const easeInOut = k => k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const easeOutBack = k => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+const PELLET_COLORS = ['#f4f1e6', '#2b2b2b', '#2f6fde', '#e8432f', '#ffd54a', '#3bb273', '#ff8a3d', '#9b6bd6'];
+function shadeHex(hex, f) {
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  r = clamp(Math.round(r * f), 0, 255); g = clamp(Math.round(g * f), 0, 255); b = clamp(Math.round(b * f), 0, 255);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ---------- 00猫 sprite (grid 33 x 38, bottom row 37) ----------
+const GW = 33, GH = 38;
+function inTri(px, py, a, b, c) {
+  const d = (p1, p2, p3) => (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]);
+  const p = [px, py], d1 = d(p, a, b), d2 = d(p, b, c), d3 = d(p, c, a);
+  return !(((d1 < 0) || (d2 < 0) || (d3 < 0)) && ((d1 > 0) || (d2 > 0) || (d3 > 0)));
+}
+function shrinkTri(t, k) {
+  const cx = (t[0][0] + t[1][0] + t[2][0]) / 3, cy = (t[0][1] + t[1][1] + t[2][1]) / 3;
+  return t.map(p => [cx + (p[0] - cx) * k, cy + (p[1] - cy) * k]);
+}
+const EAR_L = [[6.5, 0.2], [3.8, 9], [13.8, 4.2]];
+const EAR_R = [[25.5, 0.2], [28.2, 9], [18.2, 4.2]];
+function headMask(c, r, earL = 0, earR = 0) {
+  const x = c + 0.5, y = r + 0.5;
+  const ex = (x - 16.5) / 13.6, ey = (y - 12.2) / 9.4;
+  if (ex * ex + ey * ey <= 1) return 1;
+  const el = EAR_L.map(p => [p[0] - earL * 0.6, p[1] + earL]);
+  const er = EAR_R.map(p => [p[0] + earR * 0.6, p[1] + earR]);
+  if (inTri(x, y, ...el)) return 2;
+  if (inTri(x, y, ...er)) return 3;
+  return 0;
+}
+function bodyMask(c, r) {
+  const x = c + 0.5, y = r + 0.5;
+  const rr = (x0, y0, x1, y1, rad) => {
+    if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+    const cx = clamp(x, x0 + rad, x1 - rad), cy = clamp(y, y0 + rad, y1 - rad);
+    return (x - cx) ** 2 + (y - cy) ** 2 <= rad * rad;
+  };
+  return rr(1.5, 15, 31.5, 34.5, 6) || rr(6.5, 30, 14.5, 38, 2) || rr(18.5, 30, 26.5, 38, 2);
+}
+function ellMask(cx, cy, rx, ry) { return (c, r) => { const x = (c + 0.5 - cx) / rx, y = (r + 0.5 - cy) / ry; return x * x + y * y <= 1; }; }
+
+// draw a mask: fill + 1-cell outline; colorFn(c,r) for fill colour
+function drawMask(g, S, ox, oy, c0, r0, c1, r1, mask, colorFn) {
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+    if (!mask(c, r)) continue;
+    const edge = !mask(c - 1, r) || !mask(c + 1, r) || !mask(c, r - 1) || !mask(c, r + 1);
+    g.fillStyle = edge ? C.outline : colorFn(c, r);
+    g.fillRect(Math.round(ox + c * S), Math.round(oy + r * S), Math.ceil(S), Math.ceil(S));
+  }
+}
+function cells(g, S, ox, oy, list, color) {
+  g.fillStyle = color;
+  for (const [c, r] of list) g.fillRect(Math.round(ox + c * S), Math.round(oy + r * S), Math.ceil(S), Math.ceil(S));
+}
+const EYES = {
+  open:    [[1,0],[2,0],[0,1],[1,1],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[1,3],[2,3]],
+  blink:   [[0,2],[1,2],[2,2],[3,2]],
+  happy:   [[1,1],[2,1],[0,2],[3,2],[0,3],[3,3]],
+  angryL:  [[0,0],[1,1],[2,1],[3,2],[1,3],[2,3],[0,4]],
+  angryR:  [[3,0],[2,1],[1,1],[0,2],[2,3],[1,3],[3,4]],
+};
+
+/**
+ * pose: { eyes, mouth: 'smile'|'open'|'tongue', armL:[dx,dy], armR:[dx,dy], armsUp, sx, sy, headDx, headDy, earL, earR, lookUp }
+ * (x, y) = bottom centre of the feet
+ */
+function drawCat(g, x, y, S, pose = {}) {
+  const sx = pose.sx || 1, sy = pose.sy || 1;
+  g.save();
+  g.translate(x, y);
+  g.scale(sx, sy);
+  const ox = -GW * S / 2, oy = -GH * S;
+  // shadow
+  if (pose.shadowY !== undefined) {
+    g.fillStyle = 'rgba(60,30,10,0.18)';
+    g.beginPath(); g.ellipse(0, (pose.shadowY - y) / sy, 15 * S / sx, 2.2 * S, 0, 0, Math.PI * 2); g.fill();
+  }
+
+  // arms behind body when raised
+  const armL = pose.armL || [0, 0], armR = pose.armR || [0, 0];
+  const armColor = (c, r) => C.cream;
+  // body
+  drawMask(g, S, ox, oy, 0, 13, 32, 38, bodyMask, (c, r) => {
+    if (r >= 19 && r <= 21 && c > 5 && c < 28 && Math.abs(c - 16.5) < 12 - (r - 19) * 3) return C.shade;
+    if (c >= 27 && r >= 18 && r <= 31) return C.shade;
+    if (c <= 4 && r >= 26 && r <= 31) return C.shade;
+    if (r >= 32 && (c === 13 || c === 19)) return C.shade;
+    return C.cream;
+  });
+  // toes
+  cells(g, S, ox, oy, [[9, 36], [9, 37], [11, 36], [11, 37], [21, 36], [21, 37], [23, 36], [23, 37]], C.outline);
+
+  // head
+  const hdx = pose.headDx || 0, hdy = pose.headDy || 0;
+  const hox = ox + hdx * S, hoy = oy + hdy * S;
+  const eL = pose.earL || 0, eR = pose.earR || 0;
+  const triL = shrinkTri(EAR_L.map(p => [p[0] - eL * 0.6, p[1] + eL]), 0.5);
+  const triR = shrinkTri(EAR_R.map(p => [p[0] + eR * 0.6, p[1] + eR]), 0.5);
+  drawMask(g, S, hox, hoy, 0, -2, 32, 23, (c, r) => headMask(c, r, eL, eR), (c, r) => {
+    const x = c + 0.5, y = r + 0.5;
+    if (inTri(x, y, ...triL)) return C.shade;
+    if (inTri(x, y, ...triR)) return C.pinkEar;
+    if (c >= 27 && r >= 9 && r <= 17) return C.shade2;
+    return C.cream;
+  });
+  // blush
+  for (const bx of [9.2, 23.8]) {
+    const gx = hox + bx * S, gy = hoy + 15.2 * S;
+    const grd = g.createRadialGradient(gx, gy, 0, gx, gy, 3 * S);
+    grd.addColorStop(0, 'rgba(255,135,115,0.55)'); grd.addColorStop(1, 'rgba(255,135,115,0)');
+    g.fillStyle = grd; g.fillRect(gx - 3 * S, gy - 3 * S, 6 * S, 6 * S);
+  }
+  // eyes
+  const ey = pose.lookUp ? 9 : 10;
+  const eyes = pose.eyes || 'open';
+  const EL = eyes === 'angry' ? EYES.angryL : EYES[eyes], ER = eyes === 'angry' ? EYES.angryR : EYES[eyes];
+  cells(g, S, hox, hoy, EL.map(([c, r]) => [8 + c, ey + r]), C.eye);
+  cells(g, S, hox, hoy, ER.map(([c, r]) => [21 + c, ey + r]), C.eye);
+  if (eyes === 'open') cells(g, S, hox, hoy, [[9, ey + 1], [22, ey + 1]], '#ffffff');
+  // nose + mouth
+  cells(g, S, hox, hoy, [[16, 14]], C.nose);
+  cells(g, S, hox, hoy, [[15, 14], [17, 14]], '#f9d9cb');
+  const mouth = pose.mouth || 'smile';
+  if (mouth === 'open') {
+    cells(g, S, hox, hoy, [[15, 15], [16, 15], [17, 15], [14, 16], [18, 16], [14, 17], [18, 17], [15, 18], [16, 18], [17, 18]], C.eye);
+    cells(g, S, hox, hoy, [[15, 16], [16, 16], [17, 16], [15, 17], [17, 17]], C.mouthIn);
+    cells(g, S, hox, hoy, [[16, 17]], C.tongue);
+  } else {
+    cells(g, S, hox, hoy, [[16, 15], [15, 16], [14, 16], [17, 16], [18, 16]], C.eye);
+    if (mouth === 'tongue') cells(g, S, hox, hoy, [[15, 17], [16, 17], [15, 18]], C.tongue);
+  }
+  // arms in front
+  if (pose.armsUp) {
+    drawMask(g, S, ox, oy, 6, -10, 16, 16, ellMask(12.5 + armL[0], 1.5 + armL[1], 2.6, 4.2), armColor);
+    drawMask(g, S, ox, oy, 16, -10, 27, 16, ellMask(20.5 + armR[0], 1.5 + armR[1], 2.6, 4.2), armColor);
+    cells(g, S, ox, oy, [[11, -1], [13, -1], [19, -1], [21, -1]], C.outline);
+    cells(g, S, ox, oy, [[12, 0], [20, 0]], C.pinkEar);
+  } else {
+    drawMask(g, S, ox, oy, -6, 12, 18, 36, ellMask(3.6 + armL[0], 26 + armL[1], 3.2, 4.6), armColor);
+    drawMask(g, S, ox, oy, 15, 12, 39, 36, ellMask(29.4 + armR[0], 26 + armR[1], 3.2, 4.6), armColor);
+  }
+  g.restore();
+}
+
+// ---------- pixel text ----------
+const textCache = {};
+function pixelText(text, fontPx, scale, fill, outline = C.outline, shadow = true) {
+  const key = [text, fontPx, scale, fill, outline, shadow].join('|');
+  if (textCache[key]) return textCache[key];
+  const t = document.createElement('canvas'), tg = t.getContext('2d');
+  tg.font = `bold ${fontPx}px ${FONT}`;
+  const tw = Math.ceil(tg.measureText(text).width) + 6, th = fontPx + 8;
+  t.width = tw; t.height = th;
+  tg.font = `bold ${fontPx}px ${FONT}`; tg.textBaseline = 'middle'; tg.fillStyle = '#000';
+  tg.fillText(text, 3, th / 2 + 1);
+  const d = tg.getImageData(0, 0, tw, th).data;
+  const on = (x, y) => x >= 0 && y >= 0 && x < tw && y < th && d[(y * tw + x) * 4 + 3] > 110;
+  const pad = 2, out = document.createElement('canvas');
+  out.width = (tw + pad * 2) * scale; out.height = (th + pad * 2 + 1) * scale;
+  const og = out.getContext('2d');
+  const put = (x, y, col) => { og.fillStyle = col; og.fillRect((x + pad) * scale, (y + pad) * scale, scale, scale); };
+  for (let y = -1; y <= th; y++) for (let x = -1; x <= tw; x++) {
+    if (on(x, y)) continue;
+    let near = false;
+    for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) if (on(x + dx, y + dy)) { near = true; break; }
+    if (near) { if (shadow) put(x, y + 1, outline); put(x, y, outline); }
+  }
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) if (on(x, y)) put(x, y, fill);
+  textCache[key] = out;
+  return out;
+}
+function drawCentered(g, img, cx, cy, s = 1, rot = 0) {
+  g.save(); g.translate(cx, cy); g.rotate(rot); g.scale(s, s);
+  g.drawImage(img, -img.width / 2, -img.height / 2); g.restore();
+}
+
+// ---------- pellets ----------
+function pellet(g, x, y, size, color, rot = 0) {
+  g.save(); g.translate(x, y); g.rotate(rot);
+  const s = size, h = s * 0.8;
+  g.fillStyle = shadeHex(color, 0.55); g.fillRect(-s / 2, -h / 2, s, h);
+  g.fillStyle = color; g.fillRect(-s / 2 + 3, -h / 2 + 3, s - 6, h - 6);
+  g.fillStyle = 'rgba(255,255,255,0.65)'; g.fillRect(-s / 2 + 5, -h / 2 + 5, s * 0.25, h * 0.25);
+  g.restore();
+}
+const BURST = (() => {
+  const R = rng(7), arr = [];
+  for (let i = 0; i < 90; i++) {
+    const dir = R() < 0.5 ? -1 : 1;
+    arr.push({ y: 250 + R() * 1350, vx: dir * (250 + R() * 900), vy: -700 + R() * 600, rot: R() * 6, vr: (R() - 0.5) * 18,
+      size: 20 + R() * 16, color: PELLET_COLORS[Math.floor(R() * PELLET_COLORS.length)], delay: R() * 0.25 });
+  }
+  return arr;
+})();
+const RAIN = (() => {
+  const R = rng(11), arr = [];
+  for (let i = 0; i < 34; i++) arr.push({ x: 40 + R() * 1000, start: 2.6 + R() * 2.2, speed: 380 + R() * 380, sway: R() * 6,
+    size: 18 + R() * 12, color: PELLET_COLORS[Math.floor(R() * PELLET_COLORS.length)], rot: R() * 6 });
+  return arr;
+})();
+const WIPE = (() => {
+  const R = rng(23), cols = 40, rows = 120, grid = [];
+  for (let i = 0; i < cols * rows; i++) grid.push({ c: PELLET_COLORS[Math.floor(R() * PELLET_COLORS.length)], jx: (R() - 0.5) * 10, jy: (R() - 0.5) * 10, rot: (R() - 0.5) * 1.2 });
+  const edge = []; for (let i = 0; i < cols; i++) edge.push(R() * 160);
+  return { cols, rows, grid, edge };
+})();
+
+// ---------- scene pieces ----------
+const T_OPEN = 2.05, T_WIPE = 4.75, T_SWAP = 5.05;
+
+function drawStage(g, t) {
+  const grd = g.createRadialGradient(540, 700, 50, 540, 800, 1300);
+  grd.addColorStop(0, '#fff6c4'); grd.addColorStop(0.55, '#ffd36a'); grd.addColorStop(1, '#ffa94a');
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  // rotating rays
+  g.save(); g.translate(540, 700); g.rotate(t * 0.35);
+  g.fillStyle = 'rgba(255,255,255,0.22)';
+  for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 2000, (i * 2) * Math.PI / 14, (i * 2 + 1) * Math.PI / 14); g.closePath(); g.fill(); }
+  g.restore();
+  // pixel dot grid
+  g.fillStyle = 'rgba(160,90,20,0.12)';
+  for (let y = 30; y < H; y += 60) for (let x = 30 + ((y / 60) % 2) * 30; x < W; x += 60) g.fillRect(x, y, 6, 6);
+  // floor
+  g.fillStyle = 'rgba(120,60,10,0.12)'; g.fillRect(0, 1450, W, 470);
+  g.fillStyle = 'rgba(120,60,10,0.18)'; g.fillRect(0, 1450, W, 6);
+}
+
+function drawMoldHalf(g, side, off) {
+  const x0 = side < 0 ? -off : 540 + off;
+  g.save();
+  g.beginPath(); g.rect(x0, 0, 540, H); g.clip();
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, C.steel1); grd.addColorStop(1, C.steel2);
+  g.fillStyle = grd; g.fillRect(x0, 0, 540, H);
+  const R = rng(side < 0 ? 3 : 5);
+  for (let y = 0; y < H; y += 12) { g.fillStyle = `rgba(255,255,255,${0.03 + R() * 0.05})`; g.fillRect(x0, y, 540, 6); }
+  // frame plate
+  const inset = 36, fx = x0 + (side < 0 ? inset : 0), fw = 540 - inset;
+  g.fillStyle = C.steelDark; g.fillRect(fx, inset, fw, 12); g.fillRect(fx, H - inset - 12, fw, 12);
+  g.fillRect(side < 0 ? fx : x0 + fw - 12, inset, 12, H - inset * 2);
+  g.fillStyle = C.steelLight; g.fillRect(fx, inset + 12, fw, 6);
+  // guide bushings
+  const outerX = side < 0 ? x0 + 130 : x0 + 410;
+  for (const by of [200, 1700]) {
+    g.fillStyle = C.steelDark; g.beginPath(); g.arc(outerX, by, 62, 0, 7); g.fill();
+    g.fillStyle = C.steelLight; g.beginPath(); g.arc(outerX, by, 48, 0, 7); g.fill();
+    g.fillStyle = '#2a3038'; g.beginPath(); g.arc(outerX, by, 30, 0, 7); g.fill();
+  }
+  // bolts
+  for (const by of [520, 980, 1440]) {
+    g.fillStyle = C.steelDark; g.beginPath(); g.arc(outerX, by, 30, 0, 7); g.fill();
+    g.fillStyle = C.steelLight; g.fillRect(outerX - 12, by - 12, 24, 24);
+    g.fillStyle = '#2a3038'; g.fillRect(outerX - 6, by - 6, 12, 12);
+  }
+  // cooling water couplings
+  const cx = side < 0 ? x0 + 36 : x0 + 504;
+  for (const [cy, col] of [[700, '#2f6fde'], [1220, '#e8432f']]) {
+    g.fillStyle = C.steelDark; g.fillRect(cx - 24, cy - 30, 48, 60);
+    g.fillStyle = col; g.fillRect(cx - 18, cy - 18, 36, 36);
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(cx - 12, cy - 12, 10, 10);
+  }
+  // ejector pin holes
+  const ix = side < 0 ? x0 + 300 : x0 + 240;
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
+    g.fillStyle = '#2a3038'; g.beginPath(); g.arc(ix + (j - 0.5) * 120 * (side < 0 ? 1 : -1), 1120 + i * 110, 14, 0, 7); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(ix + (j - 0.5) * 120 * (side < 0 ? 1 : -1) - 4, 1120 + i * 110 - 10, 6, 4);
+  }
+  // hazard stripes
+  g.save(); g.beginPath(); g.rect(x0, 1790, 540, 60); g.clip();
+  g.fillStyle = C.yellow; g.fillRect(x0, 1790, 540, 60);
+  g.fillStyle = '#222';
+  for (let s = -120; s < 1200; s += 60) { g.beginPath(); g.moveTo(s, 1790); g.lineTo(s + 30, 1790); g.lineTo(s - 30, 1850); g.lineTo(s - 60, 1850); g.closePath(); g.fill(); }
+  g.restore();
+  // emblem (cat head) split across the parting line — drawn at mold coords so it splits on open
+  g.save(); g.translate(side < 0 ? -off : off, 0);
+  g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.arc(540, 560, 190, 0, 7); g.fill();
+  g.fillStyle = C.steelLight; g.beginPath(); g.arc(540, 560, 176, 0, 7); g.fill();
+  g.fillStyle = C.steel2; g.beginPath(); g.arc(540, 560, 160, 0, 7); g.fill();
+  const S = 9, eox = 540 - GW * S / 2, eoy = 560 - 12.5 * S;
+  for (let r = -1; r < 23; r++) for (let c = 0; c < GW; c++) if (headMask(c, r)) {
+    g.fillStyle = (!headMask(c - 1, r) || !headMask(c, r - 1)) ? C.steelLight : C.steel1;
+    g.fillRect(eox + c * S, eoy + r * S, S, S);
+  }
+  g.fillStyle = C.steelDark;
+  for (const [c, r] of EYES.open) { g.fillRect(eox + (8 + c) * S, eoy + (10 + r) * S, S, S); g.fillRect(eox + (21 + c) * S, eoy + (10 + r) * S, S, S); }
+  g.restore();
+  // parting face
+  g.fillStyle = '#2a3038'; g.fillRect(side < 0 ? x0 + 534 : x0, 0, 6, H);
+  g.fillStyle = C.steelLight; g.fillRect(side < 0 ? x0 + 526 : x0 + 6, 0, 4, H);
+  g.restore();
+}
+
+function drawChain(g, handleY, beamY) {
+  g.fillStyle = '#2f343b'; g.fillRect(0, beamY - 90, W, 90);
+  g.fillStyle = C.yellow; g.fillRect(0, beamY - 18, W, 10);
+  g.fillStyle = '#5b6572'; for (let x = 40; x < W; x += 120) g.fillRect(x, beamY - 70, 18, 18);
+  for (let y = beamY; y < handleY - 20; y += 30) {
+    const vertical = Math.round((y - beamY) / 30) % 2 === 0;
+    g.fillStyle = '#9aa5b1';
+    if (vertical) { g.fillRect(531, y, 18, 30); g.fillStyle = '#3d4651'; g.fillRect(536, y + 6, 8, 18); }
+    else { g.fillRect(524, y + 6, 32, 18); g.fillStyle = '#3d4651'; g.fillRect(530, y + 11, 20, 8); }
+  }
+  // T handle
+  g.fillStyle = '#222'; g.fillRect(470, handleY - 20, 140, 32);
+  g.save(); g.beginPath(); g.rect(474, handleY - 16, 132, 24); g.clip();
+  g.fillStyle = C.yellow; g.fillRect(474, handleY - 16, 132, 24);
+  g.fillStyle = '#222'; for (let s = 460; s < 640; s += 28) { g.beginPath(); g.moveTo(s, handleY - 16); g.lineTo(s + 14, handleY - 16); g.lineTo(s, handleY + 8); g.lineTo(s - 14, handleY + 8); g.closePath(); g.fill(); }
+  g.restore();
+}
+
+function drawSteam(g, t) {
+  const k = seg(t, T_OPEN, T_OPEN + 0.9);
+  if (k <= 0 || k >= 1) return;
+  const R = rng(99);
+  for (let i = 0; i < 26; i++) {
+    const y0 = 150 + R() * 1600, dir = R() < 0.5 ? -1 : 1, d = R() * 0.3;
+    const kk = clamp((k - d) / 0.7); if (kk <= 0) continue;
+    const x = 540 + dir * (40 + easeOut(kk) * (120 + R() * 260)), y = y0 - kk * 120;
+    const r = 30 + kk * 90;
+    g.fillStyle = `rgba(255,255,255,${0.75 * (1 - kk)})`;
+    const s = 12; g.fillRect(Math.round((x - r / 2) / s) * s, Math.round((y - r / 2) / s) * s, Math.round(r / s) * s, Math.round(r / s) * s);
+  }
+}
+
+function drawWipe(g, t) {
+  const p = seg(t, T_WIPE, T_WIPE + 0.6);
+  if (p <= 0 || p >= 1) return;
+  const bandH = 2600, top = -bandH + (H + bandH) * easeInOut(p);
+  const { cols, rows, grid, edge } = WIPE, cw = W / (cols - 1), rh = 30;
+  for (let i = 0; i < cols; i++) {
+    const colTop = top + edge[i], colBot = top + bandH - edge[(i * 7) % cols];
+    g.fillStyle = '#6b4a2f'; g.fillRect(i * cw - cw / 2, Math.max(0, colTop + 10), cw + 1, Math.max(0, Math.min(H, colBot - 10) - Math.max(0, colTop + 10)));
+    const r0 = Math.max(0, Math.floor((0 - colTop) / rh)), r1 = Math.min(rows - 1, Math.ceil((H - colTop) / rh));
+    for (let r = r0; r <= r1; r++) {
+      const y = colTop + r * rh; if (y > colBot) break;
+      const cell = grid[(r * cols + i) % grid.length];
+      pellet(g, i * cw + cell.jx, y + cell.jy, 32, cell.c, cell.rot);
+    }
+  }
+}
+
+function drawLessonCard(g, t) {
+  g.fillStyle = '#fff8e6'; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(47,111,222,0.10)';
+  for (let x = 0; x < W; x += 60) g.fillRect(x, 0, 3, H);
+  for (let y = 0; y < H; y += 60) g.fillRect(0, y, W, 3);
+  const k = seg(t, T_SWAP + 0.15, T_SWAP + 0.55);
+  // badge top-left
+  g.fillStyle = C.outline; g.fillRect(40, 150, 470, 110);
+  g.fillStyle = C.cream; g.fillRect(48, 158, 454, 94);
+  drawCat(g, 120, 262, 3.2, { eyes: 'open' });
+  drawCentered(g, pixelText('00猫塑料小课堂', 22, 2, C.outline, C.cream, false), 345, 207);
+  // lesson number ribbon
+  const s1 = easeOutBack(clamp(k * 1.4));
+  g.save(); g.translate(540, 500); g.scale(s1, s1);
+  const no = pixelText(CONFIG.lessonNo, 26, 5, '#ffffff', C.outline), bw = no.width / 2 + 40;
+  g.fillStyle = C.outline; g.fillRect(-bw - 10, -80, bw * 2 + 20, 160);
+  g.fillStyle = C.blue; g.fillRect(-bw, -70, bw * 2, 140);
+  drawCentered(g, no, 0, 0);
+  g.restore();
+  const s2 = easeOutBack(seg(t, T_SWAP + 0.35, T_SWAP + 0.75));
+  if (s2 > 0) {
+    const img = pixelText(CONFIG.lessonTitle, 22, 6, C.outline, '#ffffff');
+    const fit = Math.min(1, 1000 / img.width);
+    drawCentered(g, img, 540, 740, s2 * fit);
+  }
+  const hop = Math.abs(Math.sin((t - T_SWAP) * 9)) * 18;
+  drawCat(g, 540, 1500 - hop, 14, { shadowY: 1500, eyes: Math.sin(t * 9) > 0.6 ? 'happy' : 'open', armR: [-2, -8 + Math.sin(t * 18) * 2], mouth: 'smile' });
+}
+
+function subtitle(g, text) {
+  g.save();
+  g.font = `bold 58px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 12; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,0.85)';
+  g.strokeText(text, 540, 1580); g.fillStyle = '#ffffff'; g.fillText(text, 540, 1580);
+  g.restore();
+}
+
+// ---------- cat choreography ----------
+function catState(t) {
+  const FLOOR = 1440, S = 16;
+  let y = FLOOR, pose = { eyes: 'open', mouth: 'smile' };
+  if (t < 1.1) {
+    const up = easeOut(seg(t, 0.1, 0.35)) * (1 - easeIn(seg(t, 0.95, 1.1)));
+    const lick = t > 0.3 && t < 1.0 && Math.floor(t * 7) % 2 === 0;
+    pose = { eyes: t > 0.25 && t < 1.0 ? 'happy' : 'open', mouth: lick ? 'tongue' : 'smile',
+      armL: [up * 8.5, up * -9 + (lick ? 0.6 : 0)], headDx: up * 0.6, headDy: up * 0.4 };
+  } else if (t < 1.4) {
+    pose = { eyes: 'open', lookUp: true, mouth: 'smile', earL: -1, earR: -1 };
+  } else if (t < 1.55) {
+    const k = seg(t, 1.4, 1.55);
+    pose = { eyes: 'open', lookUp: true, sx: 1 + 0.12 * k, sy: 1 - 0.14 * k };
+  } else if (t < 1.75) {
+    const k = easeOut(seg(t, 1.55, 1.75));
+    y = lerp(FLOOR, 1312, k);
+    pose = { eyes: 'open', lookUp: true, armsUp: true, sx: 0.92, sy: 1.1, earL: 1, earR: 1 };
+  } else if (t < 2.1) {
+    y = handleY(t) + 640;
+    pose = { eyes: 'angry', mouth: t < 2.05 ? 'open' : 'smile', armsUp: true, sx: 1.04, sy: 0.97 };
+  } else if (t < 2.4) {
+    const k = seg(t, 2.1, 2.3);
+    y = lerp(handleY(2.1) + 640, FLOOR, easeIn(k));
+    const land = seg(t, 2.3, 2.4);
+    pose = { eyes: 'open', mouth: 'open', sx: land > 0 ? 1 + 0.15 * Math.sin(land * Math.PI) : 0.95, sy: land > 0 ? 1 - 0.15 * Math.sin(land * Math.PI) : 1.06, earL: -1, earR: -1 };
+  } else {
+    const beat = ((t - T_OPEN) / 0.4) % 1;
+    y = FLOOR - Math.sin(beat * Math.PI) * 14;
+    const talking = t > 2.6 && t < 4.76;
+    const blink = t > 3.6 && t < 3.7;
+    pose = { eyes: blink ? 'blink' : (t > 2.95 && t < 3.25 ? 'happy' : 'open'),
+      mouth: talking && Math.floor(t * 9) % 2 === 0 ? 'open' : 'smile',
+      armR: [-1.5, -10 + Math.sin(t * 16) * 2.5], armL: [0, Math.sin(beat * Math.PI) * -1] };
+  }
+  pose.shadowY = FLOOR;
+  return { x: 540, y, S, pose };
+}
+function handleY(t) {
+  if (t < 1.75) return 640;
+  if (t < 2.05) return lerp(640, 760, easeInOut(seg(t, 1.75, 2.05)));
+  return lerp(760, -200, easeIn(seg(t, 2.1, 2.55)));
+}
+
+// ---------- frame ----------
+function render(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  if (t >= T_SWAP) {
+    drawLessonCard(ctx, t);
+    drawWipe(ctx, t);
+    return;
+  }
+  // camera shake
+  let shake = 0;
+  shake += 22 * Math.max(0, 1 - (t - T_OPEN) / 0.35) * (t >= T_OPEN ? 1 : 0);
+  shake += 16 * Math.max(0, 1 - (t - 2.95) / 0.25) * (t >= 2.95 ? 1 : 0);
+  const R = rng(Math.floor(t * 60) + 1);
+  ctx.translate((R() - 0.5) * shake, (R() - 0.5) * shake);
+
+  const off = t < T_OPEN ? 0 : 640 * easeInOut(seg(t, T_OPEN, T_OPEN + 0.7));
+  if (off > 0) drawStage(ctx, t); else { ctx.fillStyle = '#000'; ctx.fillRect(-40, -40, W + 80, H + 80); }
+
+  // light leak from the gap
+  if (off > 0 && off < 600) {
+    const a = 1 - off / 600;
+    const lg = ctx.createLinearGradient(540 - off - 200, 0, 540 + off + 200, 0);
+    lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, `rgba(255,255,230,${a})`); lg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
+  }
+  if (off < 620) { drawMoldHalf(ctx, -1, off); drawMoldHalf(ctx, 1, off); }
+  // tiny shine sweep across the closed mold
+  if (t < 1.4) {
+    const sx = lerp(-400, 1500, seg(t, 0.2, 1.3));
+    const sg = ctx.createLinearGradient(sx - 120, 0, sx + 120, 0);
+    sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.18)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H);
+  }
+
+  // titles
+  if (t > 2.6) {
+    const s1 = easeOutBack(seg(t, 2.6, 2.85));
+    const bob = Math.sin((t - 2.6) * 5) * 6;
+    drawCentered(ctx, pixelText('00猫', 46, 8, C.cream), 540, 330 + bob, s1, Math.sin(t * 3) * 0.02);
+    const k2 = easeOutBack(seg(t, 2.75, 3.0));
+    if (k2 > 0) {
+      ctx.save(); ctx.translate(lerp(-600, 540, k2), 545);
+      ctx.fillStyle = C.outline; ctx.fillRect(-380, -78, 760, 156);
+      ctx.fillStyle = C.blue; ctx.fillRect(-370, -68, 740, 136);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(-370, -68, 740, 18);
+      drawCentered(ctx, pixelText('塑料小课堂', 30, 5, '#ffffff'), 0, 0);
+      ctx.restore();
+    }
+    const k3 = seg(t, 2.95, 3.12);
+    if (k3 > 0) {
+      const s3 = lerp(3, 1, easeOut(k3));
+      ctx.save(); ctx.translate(560, 715); ctx.rotate(-0.06); ctx.scale(s3, s3); ctx.globalAlpha = clamp(k3 * 2);
+      ctx.fillStyle = C.outline; ctx.fillRect(-300, -66, 600, 132);
+      ctx.fillStyle = C.red; ctx.fillRect(-290, -56, 580, 112);
+      drawCentered(ctx, pixelText('开课啦！', 24, 5, C.yellow), 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // chain
+  if (t < 2.6) drawChain(ctx, handleY(t), t < 2.1 ? 90 : lerp(90, -10, seg(t, 2.1, 2.5)));
+
+  // burst pellets (behind cat)
+  if (t >= T_OPEN) {
+    for (const p of BURST) {
+      const tt = t - T_OPEN - p.delay; if (tt < 0) continue;
+      const x = 540 + p.vx * tt, y = p.y + p.vy * tt + 1100 * tt * tt;
+      if (y > H + 60 || x < -60 || x > W + 60) continue;
+      pellet(ctx, x, y, p.size, p.color, p.rot + p.vr * tt);
+    }
+  }
+
+  const cat = catState(t);
+  drawCat(ctx, cat.x, cat.y, cat.S, cat.pose);
+
+  // "!" bubble
+  if (t > 1.12 && t < 1.55) {
+    const s = easeOutBack(seg(t, 1.12, 1.25));
+    ctx.save(); ctx.translate(800, 760); ctx.scale(s, s);
+    ctx.fillStyle = C.outline; ctx.fillRect(-48, -66, 96, 120); ctx.fillRect(-12, 54, 24, 24);
+    ctx.fillStyle = '#fff'; ctx.fillRect(-40, -58, 80, 104);
+    ctx.fillStyle = C.red; ctx.fillRect(-10, -44, 20, 52); ctx.fillRect(-10, 18, 20, 18);
+    ctx.restore();
+  }
+
+  drawSteam(ctx, t);
+
+  // light pellet rain during title
+  for (const p of RAIN) {
+    const tt = t - p.start; if (tt < 0) continue;
+    const y = -40 + p.speed * tt; if (y > H) continue;
+    pellet(ctx, p.x + Math.sin(tt * 3 + p.sway) * 30, y, p.size, p.color, p.rot + tt * 2);
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (t > 1.75 && t < 2.35) subtitle(ctx, '开模！');
+  if (t > 2.6 && t < 4.8) subtitle(ctx, '00猫塑料小课堂，开课啦！');
+  drawWipe(ctx, t);
+}
+
+window.render = render;
+window.DURATION = DURATION;
+window.ready = document.fonts ? document.fonts.ready : Promise.resolve();
+
+// live preview when opened in a browser
+if (!new URLSearchParams(location.search).has('render')) {
+  const start = performance.now();
+  (function loop() { render(((performance.now() - start) / 1000) % (DURATION + 0.6)); requestAnimationFrame(loop); })();
+}
+</script>
+</body>
+</html>
