@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第01课 正片</title>
+<style>
+  html, body { margin: 0; background: #222; }
+  canvas { display: block; margin: 0 auto; max-height: 100vh; width: auto; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script src="../lib.js"></script>
+<script src="timeline.js"></script>
+<script>
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const TL = window.TIMELINE;
+const DURATION = TL.total;
+const LINE = Object.fromEntries(TL.lines.map(l => [l.id, l]));
+
+// ---------- 时间工具：按台词里的关键词定位时间 ----------
+const S_ = id => LINE[id].start;
+const E_ = id => LINE[id].end;
+function at(id, word) {  // 台词念到某个词的大概时间
+  const l = LINE[id], i = l.say.indexOf(word);
+  if (i < 0) throw new Error(`${id} 里没有「${word}」`);
+  return l.start + (l.end - l.start) * (i / l.say.length);
+}
+const pop = (t, t0, d = 0.25) => easeOutBack(seg(t, t0, t0 + d));
+const SCENES = [];
+for (const l of TL.lines) {
+  const last = SCENES[SCENES.length - 1];
+  if (!last || last.name !== l.scene) SCENES.push({ name: l.scene, start: l.start, end: l.end });
+  else last.end = l.end;
+}
+SCENES.forEach((s, i) => { s.from = i === 0 ? 0 : (SCENES[i - 1].end + s.start) / 2; s.to = i === SCENES.length - 1 ? DURATION + 1 : null; });
+if (SCENES[0].name === 'hook') SCENES[1].from = TL.splice;   // 钩子后面接片头，不做转场
+SCENES.forEach((s, i) => { if (i < SCENES.length - 1) s.to = SCENES[i + 1].from; });
+const sceneAt = t => SCENES.find(s => t >= s.from && t < s.to) || SCENES[SCENES.length - 1];
+
+// ---------- 音效提示（给 audio 合成用）----------
+const CUES = [];
+const cue = (t, type, gain = 1) => CUES.push({ t: +t.toFixed(3), type, gain });
+
+// ---------- 像素小图（字符画）----------
+const PAL = { k: C.outline, K: '#151515', w: '#ffffff', c: C.cream, g: '#c9c9c9', G: '#7d8a99', s: '#9aa5b1', y: C.yellow, o: C.orange,
+  r: C.red, b: C.blue, B: '#1d3f8a', l: '#9fd8ff', p: '#ffb3b3', n: '#c58b52', N: '#7a4a25', m: '#f3e1c7', e: '#3bb273', d: '#555b66' };
+const SPR = {
+  drill: [
+    '......kkkkkkkkkkkkk...',
+    '.....kbbbbbbbbbbbbbk..',
+    'kkkkkbbbbbbbbbbbbbbbkk',
+    'ssssskbbbbbbbbbbbbbbbk',
+    'kkkkkbbbbbbbbbbbbbbbkk',
+    '.....kbbbbbbbbbbbbbbk.',
+    '......kkkkkkbbbbbkkk..',
+    '...........kbbbbk.....',
+    '...........kbKbbk.....',
+    '...........kbKbbk.....',
+    '..........kbbbbbk.....',
+    '..........kbbbbbk.....',
+    '.........kkkkkkkkk....',
+    '.........kKKKKKKKk....',
+    '.........kKKdKdKKk....',
+    '.........kkkkkkkkk....'],
+  socket: [
+    'kkkkkkkkkkkkkkkk',
+    'kwwwwwwwwwwwwwwk',
+    'kwwwwwwwwwwwwwwk',
+    'kwwwKwwwwwwKwwwk',
+    'kwwwwKwwwwKwwwwk',
+    'kwwwwwKwwKwwwwwk',
+    'kwwwwwwwwwwwwwwk',
+    'kwwwwwwwKwwwwwwk',
+    'kwwwwwwwKwwwwwwk',
+    'kwwwwwwwwwwwwwwk',
+    'kwwwKwwwwwwKwwwk',
+    'kwwwKwwwwwwKwwwk',
+    'kwwwwwwwwwwwwwwk',
+    'kggggggggggggggk',
+    'kkkkkkkkkkkkkkkk'],
+  washer: [
+    'kkkkkkkkkkkkkkkk',
+    'kwwwwwwwwwwbbwwk',
+    'kwwwwwwwwwwwwwwk',
+    'kkkkkkkkkkkkkkkk',
+    'kwwwwkkkkkkwwwwk',
+    'kwwwkllllllkwwwk',
+    'kwwklllwlllllwwk',
+    'kwwkllwlllllkwwk',
+    'kwwklllllllllwwk',
+    'kwwkllllllllkwwk',
+    'kwwwkllllllkwwwk',
+    'kwwwwkkkkkkwwwwk',
+    'kwwwwwwwwwwwwwwk',
+    'kggggggggggggggk',
+    'kkkkkkkkkkkkkkkk'],
+  charger: [
+    '..k..k..',
+    '..k..k..',
+    'kkkkkkkk',
+    'kwwwwwwk',
+    'kwwwwwwk',
+    'kwwbbwwk',
+    'kwwwwwwk',
+    'kwwwwwwk',
+    'kggggggk',
+    'kkkkkkkk'],
+  car: [
+    '........kkkkkkkkkkk.......',
+    '.......kllllkwkllllk......',
+    '......kllllkwwkllllkk.....',
+    '..kkkkkkkkkkkkkkkkkkkkkk..',
+    '.krrrrrrrrrrrrrrrrrrrrrrk.',
+    'krrrrrrrrrrrrrrrrrrrrrrrrk',
+    'kyyrrrrrrrrrrrrrrrrrrrryyk',
+    'kkkkkkkkkkkkkkkkkkkkkkkkkk',
+    'kKkkkkkkkkkkkkkkkkkkkkkkkk',
+    '.kkKKKkkkkkkkkkkkkkKKKkkk.',
+    '...KKKKK..........KKKKK...',
+    '....KKK............KKK....'],
+  snow: [
+    '....w....', '.w..w..w.', '..w.w.w..', '...www...', 'wwwwwwwww', '...www...', '..w.w.w..', '.w..w..w.', '....w....'],
+  sun: [
+    '.....y.....', '.y...y...y.', '..y.....y..', '....yyy....', '...yyyyy...', 'yy.yyyyy.yy', '...yyyyy...', '....yyy....', '..y.....y..', '.y...y...y.', '.....y.....'],
+  flame1: ['....r....', '...ror...', '..rooor..', '..royoor.', '.royyyor.', '.royyyyor', '.royyyyor', '..ryyyyr.', '...rrrr..'],
+  flame2: ['.....r...', '....ror..', '...roor..', '..rooyor.', '.royyyor.', 'roryyyyor', '.royyyyor', '..ryyyyr.', '...rrrr..'],
+  hammer: [
+    'kkkkkkkkkk..', 'kGGGGGGGGk..', 'kGGGGGGGGkkk', 'kGGGGGGGGGGk', 'kkkkkkkkkkkk', '...knnk.....', '...knnk.....', '...knnk.....', '...knnk.....', '...knnk.....', '...knnk.....', '...kkkk.....'],
+  bubble: [
+    'kkkkkkkkkkkk', 'kwwwwwwwwwwk', 'kwKwwKwwKwwk', 'kwwwwwwwwwwk', 'kkkkwwkkkkkk', '...kwk......', '...kk.......'],
+  book: [
+    'kkkkkkkkkkkkkkkk', 'kyyyyyyykyyyyyyk', 'kyrrrryykyrrrryk', 'kyyyyyyykyyyyyyk', 'kyrrrrrykyrrrryk', 'kyyyyyyykyyyyyyk', 'kyrrryyykyrrryyk', 'kyyyyyyykyyyyyyk', 'kkkkkkkkkkkkkkkk'],
+  sponge: [
+    'kkkkkkkkkkkkkk', 'kyyyyyyyyyyyyk', 'kyyoyyyyyoyyyk', 'kyyyyyoyyyyyyk', 'kyoyyyyyyyoyyk', 'kyyyyoyyyyyyyk', 'kyyyyyyyoyyoyk', 'kkkkkkkkkkkkkk'],
+  bag: [
+    '...kkkkkkkk...', '...kcccccck...', '....kkcckk....', '..kkccccccckk.', '.kcccccccccccck', 'kcccccccccccccck', 'kcccccccccccccck', 'kcccccccccccccck', 'kcccccccccccccck', 'kcccccccccccccck', 'kcccccccccccccck', 'kcccccccccccccck', '.kcccccccccccck.', '..kkkkkkkkkkkk..'],
+  heart: ['.kk...kk.', 'krrk.krrk', 'krrrkrrrk', 'krrrrrrrk', '.krrrrrk.', '..krrrk..', '...krk...', '....k....'],
+  arrowL: ['....kk', '...kyk', '..kyyk', '.kyyykkkkk', 'kyyyyyyyyk', '.kyyykkkkk', '..kyyk', '...kyk', '....kk'],
+  arrowR: ['kk....', 'kyk...', 'kyyk..', 'kkkkkyyyk.', 'kyyyyyyyyk', 'kkkkkyyyk.', 'kyyk..', 'kyk...', 'kk....'],
+  cursor: ['k.....', 'kk....', 'kwk...', 'kwwk..', 'kwwwk.', 'kwwwwk', 'kwwkkk', 'kkwk..', '..kk..'],
+};
+function sprite(g, name, cx, cy, u, opts = {}) {
+  const rows = SPR[name], w = Math.max(...rows.map(r => r.length)), h = rows.length;
+  g.save(); g.translate(cx, cy); if (opts.rot) g.rotate(opts.rot); if (opts.sx || opts.sy) g.scale(opts.sx || 1, opts.sy || 1);
+  if (opts.alpha !== undefined) g.globalAlpha = opts.alpha;
+  for (let r = 0; r < h; r++) for (let c = 0; c < rows[r].length; c++) {
+    const ch = rows[r][c]; if (ch === '.') continue;
+    g.fillStyle = (opts.map && opts.map[ch]) || PAL[ch];
+    g.fillRect(Math.round((c - w / 2) * u), Math.round((r - h / 2) * u), Math.ceil(u), Math.ceil(u));
+  }
+  g.restore();
+}
+
+// ---------- 通用小部件 ----------
+function panel(g, cx, cy, w, h, fill = '#ffffff', border = C.outline, bw = 8) {
+  g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(cx - w / 2 + 10, cy - h / 2 + 12, w, h);
+  g.fillStyle = border; g.fillRect(cx - w / 2, cy - h / 2, w, h);
+  g.fillStyle = fill; g.fillRect(cx - w / 2 + bw, cy - h / 2 + bw, w - bw * 2, h - bw * 2);
+}
+function chip(g, text, cx, cy, s, bg, fg = '#ffffff', size = 20, scale = 4) {
+  if (s <= 0) return;
+  const img = pixelText(text, size, scale, fg, C.outline, false);
+  g.save(); g.translate(cx, cy); g.scale(s, s);
+  panel(g, 0, 0, img.width + 40, img.height + 16, bg);
+  g.drawImage(img, -img.width / 2, -img.height / 2);
+  g.restore();
+}
+function title(g, text, cx, cy, s, fill = C.cream, size = 30, scale = 6) {
+  if (s <= 0) return;
+  const img = pixelText(text, size, scale, fill);
+  const fit = Math.min(1, 1020 / img.width);
+  drawCentered(g, img, cx, cy, s * fit);
+}
+function subtitle(g, text) {
+  g.save();
+  g.font = `bold 54px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 12; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,0.88)';
+  g.strokeText(text, 540, 1650); g.fillStyle = '#ffffff'; g.fillText(text, 540, 1650);
+  g.restore();
+}
+// 把一句台词按标点切成几段字幕，按字数分配时间
+const SUBS = [];
+for (const l of TL.lines) {
+  const parts = l.sub.match(/[^，。？！：；、]+[，。？！：；、]*/g) || [l.sub];
+  const chunks = []; let cur = '';
+  for (const p of parts) { if ((cur + p).replace(/[，。、：；]$/, '').length > 15 && cur) { chunks.push(cur); cur = p; } else cur += p; }
+  if (cur) chunks.push(cur);
+  const total = chunks.reduce((a, c) => a + c.length, 0); let t = l.start;
+  for (const c of chunks) { const d = (l.end - l.start) * c.length / total; SUBS.push({ text: c.replace(/[，、：；]$/, ''), start: t, end: t + d }); t += d; }
+}
+function poof(g, cx, cy, t, t0, r = 140) {
+  const k = seg(t, t0, t0 + 0.45); if (k <= 0 || k >= 1) return;
+  const R = rng(Math.round(t0 * 100));
+  for (let i = 0; i < 14; i++) {
+    const a = R() * Math.PI * 2, d = easeOut(k) * r * (0.5 + R() * 0.6), s = (1 - k) * (40 + R() * 40);
+    g.fillStyle = `rgba(255,255,255,${0.95 * (1 - k)})`;
+    g.fillRect(Math.round((cx + Math.cos(a) * d - s / 2) / 8) * 8, Math.round((cy + Math.sin(a) * d - s / 2) / 8) * 8, Math.round(s / 8) * 8, Math.round(s / 8) * 8);
+  }
+}
+function sparkle(g, cx, cy, t, seed = 1, n = 6, r = 160) {
+  const R = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const ph = (t * 1.6 + R()) % 1, x = cx + (R() - 0.5) * r * 2, y = cy + (R() - 0.5) * r * 2, s = Math.sin(ph * Math.PI) * 14;
+    if (s < 2) continue;
+    g.fillStyle = '#ffffff'; g.fillRect(x - s / 2, y - 2, s, 4); g.fillRect(x - 2, y - s / 2, 4, s);
+  }
+}
+
+// ---------- 奶茶杯 ----------
+// opts: label, tea, ice(0..1), pearls, foam, fibers, suit, wobble
+function drawCup(g, cx, by, u, o = {}) {
+  const Wt = 16, Ht = 22; // grid
+  g.save(); g.translate(cx, by); if (o.rot) g.rotate(o.rot);
+  const ox = -Wt * u / 2, oy = -Ht * u;
+  const px = (c, r, col) => { g.fillStyle = col; g.fillRect(Math.round(ox + c * u), Math.round(oy + r * u), Math.ceil(u), Math.ceil(u)); };
+  const half = r => 7.5 - (r - 3) * 0.12;   // 杯子上宽下窄
+  // straw
+  for (let r = -6; r < 3; r++) { px(10 + Math.floor((-r) / 3), r, C.outline); px(11 + Math.floor((-r) / 3), r, o.strawColor || C.red); }
+  // lid
+  for (let c = 1; c < 15; c++) { px(c, 2, C.outline); px(c, 1, c === 1 || c === 14 ? C.outline : '#ffffff'); }
+  for (let c = 3; c < 13; c++) px(c, 0, C.outline);
+  for (let r = 3; r < Ht; r++) {
+    const h = half(r), c0 = Math.round(8 - h), c1 = Math.round(8 + h) - 1;
+    for (let c = c0; c <= c1; c++) {
+      let col;
+      if (c === c0 || c === c1 || r === Ht - 1) col = C.outline;
+      else {
+        const lvl = 5;
+        if (r < lvl) col = '#eef7ff';
+        else if (o.foam && r < lvl + 3) col = (c + r) % 5 === 0 ? '#fff' : '#fff6e6';
+        else col = o.tea || '#b07a4a';
+        if (r >= Ht - 4 && o.pearls && (c + r) % 2 === 0) col = '#2b1a12';
+        if (c === c0 + 1 && r > 4) col = 'rgba(255,255,255,0.55)';
+      }
+      px(c, r, col);
+    }
+  }
+  // ice cubes
+  if (o.ice) {
+    const n = Math.round(o.ice * 9), R = rng(5);
+    for (let i = 0; i < n; i++) { const c = 3 + Math.floor(R() * 9), r = 6 + Math.floor(R() * Math.min(13, 4 + o.ice * 12)); px(c, r, '#dff4ff'); px(c + 1, r, '#bfe6ff'); px(c, r + 1, '#bfe6ff'); px(c + 1, r + 1, '#ffffff'); }
+  }
+  // glass fibers
+  if (o.fibers) {
+    const R = rng(9);
+    for (let i = 0; i < 7; i++) { const c = 3 + Math.floor(R() * 8), r = 7 + Math.floor(R() * 10); for (let k = 0; k < 3; k++) px(c + k, r + (i % 2 ? k : -k) * 0.5, '#f2f2f2'); }
+  }
+  // label band
+  if (o.label) {
+    for (let r = 11; r < 15; r++) { const h = half(r); for (let c = Math.round(8 - h) + 1; c <= Math.round(8 + h) - 2; c++) px(c, r, o.labelBg || '#ffffff'); }
+  }
+  // fire suit (阻燃防火服)
+  if (o.suit > 0) {
+    g.globalAlpha = clamp(o.suit);
+    for (let r = 8; r < Ht - 1; r++) { const h = half(r); for (let c = Math.round(8 - h); c <= Math.round(8 + h) - 1; c++) px(c, r, (r === 12 || r === 17) ? '#f8f8a0' : (c === Math.round(8 - h) || c === Math.round(8 + h) - 1) ? C.outline : '#ff7a1a'); }
+    g.globalAlpha = 1;
+  }
+  g.restore();
+  if (o.label) drawCentered(g, pixelText(o.label, 16, Math.max(2, Math.round(u / 3)), C.outline, '#ffffff', false), cx, by + (-Ht + 13) * u);
+}
+
+// ---------- 背景 ----------
+function bgShop(g, t) {
+  g.fillStyle = '#ffe3cf'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#ffd3b8';
+  for (let y = 0; y < 1420; y += 80) for (let x = (y / 80) % 2 ? 0 : 40; x < W; x += 80) g.fillRect(x, y, 40, 40);
+  // 菜单板
+  panel(g, 540, 380, 980, 520, '#2f4a3a', '#6b4a2f', 18);
+  g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(70, 140, 940, 10);
+  // 吧台
+  g.fillStyle = '#b8743c'; g.fillRect(0, 1420, W, 500);
+  g.fillStyle = '#d18b4c'; g.fillRect(0, 1420, W, 26);
+  g.fillStyle = '#9c5f2e'; for (let x = 0; x < W; x += 135) g.fillRect(x, 1446, 6, 474);
+  g.fillStyle = '#7a4520'; g.fillRect(0, 1446, W, 8);
+}
+function boardText(g, lines, t) {   // 菜单板上的粉笔字 [{text,t0,size,color}]
+  let y = 230;
+  for (const L of lines) {
+    const s = pop(t, L.t0, 0.3);
+    if (s > 0) { const img = pixelText(L.text, L.size || 26, L.scale || 5, L.color || '#ffffff', '#1b2c22', false); drawCentered(g, img, 540, y + (L.dy || 0), s * Math.min(1, 900 / img.width)); }
+    y += L.gap || 170;
+  }
+}
+function bgFactory(g) {
+  g.fillStyle = '#5d6b7c'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#66768a'; for (let x = 0; x < W; x += 180) g.fillRect(x, 0, 170, 1450);
+  g.fillStyle = '#4b5666'; for (let y = 120; y < 1450; y += 220) g.fillRect(0, y, W, 6);
+  g.fillStyle = '#3a4250'; g.fillRect(0, 1450, W, 470);
+  g.save(); g.beginPath(); g.rect(0, 1450, W, 40); g.clip();
+  g.fillStyle = C.yellow; g.fillRect(0, 1450, W, 40); g.fillStyle = '#222';
+  for (let s = -60; s < W + 60; s += 60) { g.beginPath(); g.moveTo(s, 1450); g.lineTo(s + 30, 1450); g.lineTo(s, 1490); g.lineTo(s - 30, 1490); g.closePath(); g.fill(); }
+  g.restore();
+}
+function bgDark(g, t) {
+  g.fillStyle = '#1b2232'; g.fillRect(0, 0, W, H);
+  const sp = g.createRadialGradient(540, 1150, 50, 540, 1150, 750);
+  sp.addColorStop(0, 'rgba(255,240,180,0.35)'); sp.addColorStop(1, 'rgba(255,240,180,0)');
+  g.fillStyle = sp; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#273047'; g.fillRect(0, 1400, W, 520);
+}
+function bgSunny(g, t, c1 = '#fff6c4', c2 = '#ffb547') {
+  const grd = g.createRadialGradient(540, 900, 50, 540, 900, 1300);
+  grd.addColorStop(0, c1); grd.addColorStop(1, c2); g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  g.save(); g.translate(540, 900); g.rotate(t * 0.2); g.fillStyle = 'rgba(255,255,255,0.18)';
+  for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 2000, (i * 2) * Math.PI / 14, (i * 2 + 1) * Math.PI / 14); g.closePath(); g.fill(); }
+  g.restore();
+  g.fillStyle = 'rgba(120,60,10,0.15)'; g.fillRect(0, 1450, W, 470);
+}
+
+// ---------- 注塑机 ----------
+function injMachine(g, x, y, s, t, running = false) {
+  g.save(); g.translate(x, y); g.scale(s, s);
+  panel(g, 300, 330, 620, 120, '#2f6fde');           // 机身底座
+  panel(g, 120, 160, 220, 240, '#e7ecf2');          // 合模部分
+  panel(g, 120, 160, 120, 150, '#9aa5b1');
+  panel(g, 380, 190, 360, 70, '#c9d1da');           // 料筒
+  g.fillStyle = C.red; for (let i = 0; i < 4; i++) g.fillRect(250 + i * 80, 160, 30, 60);
+  g.fillStyle = C.outline; g.beginPath(); g.moveTo(430, 150); g.lineTo(510, 30); g.lineTo(590, 30); g.lineTo(520, 150); g.closePath(); g.fill();
+  g.fillStyle = '#e7ecf2'; g.beginPath(); g.moveTo(444, 142); g.lineTo(515, 40); g.lineTo(577, 40); g.lineTo(512, 142); g.closePath(); g.fill();
+  panel(g, 520, 300, 110, 80, '#1b2232');           // 控制屏
+  g.fillStyle = running && Math.floor(t * 4) % 2 ? '#3bb273' : '#2a8a55'; g.fillRect(490, 285, 60, 30);
+  g.restore();
+}
+
+// ---------- 各场景 ----------
+const scene = {};
+
+scene.hook = (g, t) => {
+  bgDark(g, t);
+  title(g, '同样是PP粒子', 540, 330, pop(t, S_('H1')), C.cream, 30, 6);
+  const tg = at('H1', '贵一倍');
+  for (const [i, x] of [[0, 290], [1, 790]]) {
+    const t0 = 0.15 + i * 0.25, k = seg(t, t0, t0 + 0.35);
+    if (k <= 0) continue;
+    const y = lerp(-200, 1180, easeIn(k)) - (k >= 1 ? Math.abs(Math.sin((t - t0 - 0.35) * 14)) * 30 * Math.max(0, 1 - (t - t0 - 0.35) * 3) : 0);
+    sprite(g, 'bag', x, y, 22);
+    drawCentered(g, pixelText('PP', 22, 5, C.blue, '#ffffff', false), x, y + 30);
+  }
+  chip(g, '¥ 几千/吨', 290, 820, pop(t, at('H1', '为什么')), C.green || '#3bb273', '#ffffff', 22, 4);
+  const s2 = pop(t, tg, 0.3) * (1 + 0.06 * Math.sin(t * 10) * (t > tg + 0.3 ? 1 : 0));
+  chip(g, '¥ 贵一倍！', 790, 820, s2, C.red, C.yellow, 24, 4);
+  if (t > tg) title(g, '凭什么？', 540, 560, pop(t, at('H1', '老板')), C.yellow, 34, 6);
+  const look = t < tg ? Math.sin(t * 3) * 1.2 : 1.2;
+  drawCat(g, 540, 1500, 11, { eyes: t > tg && t < tg + 0.5 ? 'open' : 'open', mouth: t > at('H1', '老板') ? 'open' : 'smile', headDx: look, shadowY: 1500 });
+  if (t > at('H1', '抢着要')) sprite(g, 'bubble', 700, 1020, 9);
+  if (t > at('H1', '抢着要')) drawCentered(g, pixelText('？', 30, 5, C.red, '#ffffff', false), 700, 1010);
+};
+cue(0.45, 'thud'); cue(0.7, 'thud'); cue(at('H1', '为什么'), 'pop'); cue(at('H1', '贵一倍'), 'stamp'); cue(at('H1', '老板'), 'pop');
+
+scene.pain = (g, t) => {
+  bgFactory(g);
+  title(g, '老板们的烦恼', 540, 230, pop(t, S_('P1')), C.cream, 28, 5);
+  injMachine(g, 40, 1000, 0.95, t, true);
+  const cards = [
+    { t0: S_('P2'), x: 185, label: '冬天摔裂' },
+    { t0: S_('P3'), x: 540, label: '夏天变形' },
+    { t0: S_('P4'), x: 895, label: '一烧就着' },
+  ];
+  cards.forEach((cd, i) => {
+    const s = pop(t, cd.t0, 0.3); if (s <= 0) return;
+    g.save(); g.translate(cd.x, 650); g.scale(s, s); g.rotate((i - 1) * 0.04);
+    panel(g, 0, 0, 300, 360, '#ffffff');
+    if (i === 0) {
+      panel(g, 0, -20, 170, 130, '#dfe5ec');
+      const crack = seg(t, cd.t0 + 0.4, cd.t0 + 0.6);
+      g.fillStyle = C.outline; const pts = [[-10, -85], [10, -55], [-12, -25], [12, 5], [-5, 30], [8, 45]];
+      for (let k = 0; k < pts.length - 1 && k < crack * pts.length; k++) g.fillRect(pts[k][0] - 4, pts[k][1], 8, pts[k + 1][1] - pts[k][1]);
+      const R = rng(4); for (let k = 0; k < 6; k++) { const y = ((t * 120 + R() * 300) % 300) - 150; sprite(g, 'snow', -120 + R() * 240, y, 4); }
+    } else if (i === 1) {
+      sprite(g, 'sun', 80, -100, 7);
+      const w = seg(t, cd.t0 + 0.3, cd.t0 + 1.2);
+      g.fillStyle = C.outline;
+      for (let x = -110; x <= 110; x += 10) { const y = 30 + Math.sin((x / 110) * Math.PI) * -40 * w + Math.sin(x / 25) * 10 * w; g.fillRect(x, y, 12, 30); }
+      g.fillStyle = '#dfe5ec'; for (let x = -100; x <= 100; x += 10) { const y = 30 + Math.sin((x / 110) * Math.PI) * -40 * w + Math.sin(x / 25) * 10 * w; g.fillRect(x, y + 6, 12, 18); }
+    } else {
+      sprite(g, 'socket', 0, -10, 9);
+      if (t > cd.t0 + 0.4) sprite(g, Math.floor(t * 8) % 2 ? 'flame1' : 'flame2', 30, -80, 9);
+    }
+    drawCentered(g, pixelText(cd.label, 20, 4, C.red, '#ffffff', false), 0, 130);
+    g.restore();
+  });
+  const st = at('P5', '料没选对');
+  if (t > st) {
+    const k = seg(t, st, st + 0.18), s = lerp(3, 1, easeOut(k));
+    g.save(); g.translate(540, 650); g.rotate(-0.08); g.scale(s, s); g.globalAlpha = clamp(k * 2);
+    panel(g, 0, 0, 720, 170, C.red, C.outline, 12);
+    drawCentered(g, pixelText('料没选对！', 30, 5, C.yellow), 0, 0);
+    g.restore();
+  }
+  const worried = t > S_('P2') && t < st;
+  drawCat(g, 860, 1560, 9, { hat: 'helmet', eyes: worried ? 'sad' : 'open', mouth: t > st ? 'open' : 'smile', armR: t > st ? [-1.5, -10] : [0, 0], shadowY: 1560 });
+};
+cue(S_('P2'), 'pop'); cue(S_('P2') + 0.45, 'crack'); cue(S_('P3'), 'pop'); cue(S_('P4'), 'pop'); cue(S_('P4') + 0.4, 'fire'); cue(at('P5', '料没选对'), 'stamp');
+
+scene.tea = (g, t) => {
+  bgShop(g, t);
+  const lines = [{ text: '00猫奶茶店', t0: S_('T1') - 0.3, size: 32, scale: 6, color: C.yellow, gap: 150 }];
+  if (t > S_('T2')) lines.push({ text: '普通塑料 = 纯茶', t0: S_('T2'), gap: 120 });
+  if (t > S_('T4')) lines.push({ text: '改性 = 茶底 + 小料', t0: S_('T4'), color: '#ffd9a0' });
+  boardText(g, lines, t);
+  const showBig = t > S_('T4');
+  const sway = Math.sin(t * 4) * 0.03;
+  drawCat(g, 260, 1520, 11, { apron: true, eyes: t > S_('T3') && t < S_('T4') ? 'blink' : 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile',
+    armR: t < S_('T2') ? [-1.5, -10 + Math.sin(t * 14) * 2] : [3, -4], shadowY: 1520 });
+  if (!showBig) {
+    const bases = [['PP', at('T2', 'PP')], ['ABS', at('T2', 'ABS')], ['尼龙', at('T2', '尼龙')], ['PC', at('T2', '都是')]];
+    bases.forEach(([lab, t0], i) => {
+      const s = pop(t, t0, 0.3); if (s <= 0) return;
+      const wob = t > S_('T3') ? Math.sin(t * 9 + i) * 0.08 : 0;
+      g.save(); g.translate(500 + i * 155, 1430); g.scale(s, s); drawCup(g, 0, 0, 8, { label: lab, tea: ['#c9a27a', '#b07a4a', '#d8c39a', '#a8c8e8'][i], rot: wob }); g.restore();
+    });
+    if (t > S_('T3')) chip(g, '能喝，但不够味', 740, 900, pop(t, S_('T3')), '#7d8a99', '#ffffff', 18, 4);
+  } else {
+    const k1 = at('T4', '加小料'), k2 = at('T4', '调配方');
+    drawCup(g, 740, 1430, 17, { label: 'PP', tea: '#c9a27a', pearls: t > k1 + 0.4, ice: t > k1 + 0.8 ? 0.4 : 0, foam: t > k2, rot: sway });
+    // 掉落的小料
+    const R = rng(3);
+    for (let i = 0; i < 10; i++) {
+      const t0 = k1 + i * 0.08, k = seg(t, t0, t0 + 0.4); if (k <= 0 || k >= 1) continue;
+      g.fillStyle = i % 2 ? '#2b1a12' : '#dff4ff'; g.fillRect(650 + R() * 140, lerp(700, 1150, easeIn(k)), 22, 22);
+    }
+    if (t > S_('T5')) {
+      const s = pop(t, at('T5', '配方'), 0.35);
+      if (s > 0) { g.save(); g.translate(740, 750); g.scale(s, s); sprite(g, 'book', 0, 0, 16); g.restore(); sparkle(g, 740, 750, t, 7, 8, 170); chip(g, '配方 = 看家本事', 740, 880, s, C.red, C.yellow, 20, 4); }
+    }
+  }
+};
+cue(at('T2', 'PP'), 'pop'); cue(at('T2', 'ABS'), 'pop'); cue(at('T2', '尼龙'), 'pop'); cue(at('T2', '都是'), 'pop');
+cue(S_('T4'), 'whoosh'); cue(at('T4', '加小料'), 'drops'); cue(at('T5', '配方'), 'ding');
+
+function topicHeader(g, t, no, name, eq, tA, tB) {
+  boardText(g, [{ text: `${no} ${name}`, t0: tA, size: 30, scale: 6, color: C.yellow, gap: 160 }, { text: eq, t0: tB, color: '#ffffff' }], t);
+}
+
+scene.fill = (g, t) => {
+  bgShop(g, t);
+  topicHeader(g, t, '①', '填充', '= 奶茶多加冰', S_('F1'), at('F1', '就像'));
+  const tIce = at('F1', '多加冰'), tProd = at('F2', '成本'), tMore = S_('F3'), tBrittle = at('F3', '发脆');
+  const ice = t < tMore ? 0.35 * seg(t, tIce, tIce + 0.6) : lerp(0.35, 1, seg(t, tMore, tMore + 1.5));
+  if (t < tProd || t > tMore) drawCup(g, 740, 1430, 17, { label: 'PP', tea: t > at('F3', '没味道') ? '#e3d3bd' : '#c9a27a', ice, rot: Math.sin(t * 4) * 0.02 });
+  else {
+    sprite(g, 'washer', 740, 1150, 22);
+    chip(g, '成本↓', 600, 780, pop(t, at('F2', '成本')), '#3bb273');
+    chip(g, '刚性↑', 880, 780, pop(t, at('F2', '硬挺')), C.blue);
+  }
+  poof(g, 720, 1200, t, tProd);
+  chip(g, '滑石粉', 600, 800, t < tProd ? pop(t, at('F2', '滑石粉')) : 0, '#ffffff', C.outline, 18, 4);
+  chip(g, '碳酸钙', 880, 800, t < tProd ? pop(t, at('F2', '碳酸钙')) : 0, '#ffffff', C.outline, 18, 4);
+  if (t > tMore) chip(g, '冰太多 → 没味道', 740, 760, pop(t, at('F3', '没味道')), '#7d8a99');
+  if (t > tBrittle) {
+    const k = seg(t, tBrittle, tBrittle + 0.2);
+    g.fillStyle = C.outline; const pts = [[720, 1080], [760, 1160], [710, 1240], [770, 1320], [730, 1400]];
+    for (let i = 0; i < pts.length - 1 && i < k * 5; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[i + 1]; for (let s = 0; s < 1; s += 0.1) g.fillRect(lerp(x0, x1, s) - 5, lerp(y0, y1, s) - 5, 10, 10); }
+    chip(g, '加多了 → 发脆！', 740, 870, pop(t, tBrittle), C.red, C.yellow, 20, 4);
+  }
+  const facepalm = t > tBrittle ? easeOut(seg(t, tBrittle, tBrittle + 0.3)) : 0;
+  drawCat(g, 260, 1520, 11, { apron: true, eyes: facepalm > 0 ? 'sad' : 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile',
+    armL: [facepalm * 8.5, facepalm * -9], armR: facepalm ? [0, 0] : [3, -4], shadowY: 1520 });
+};
+cue(at('F1', '多加冰'), 'clink'); cue(at('F1', '多加冰') + 0.25, 'clink'); cue(at('F2', '滑石粉'), 'pop'); cue(at('F2', '碳酸钙'), 'pop');
+cue(at('F2', '成本'), 'poof'); cue(S_('F3'), 'clink'); cue(S_('F3') + 0.4, 'clink'); cue(S_('F3') + 0.8, 'clink'); cue(at('F3', '发脆'), 'crack');
+
+scene.gf = (g, t) => {
+  bgShop(g, t);
+  topicHeader(g, t, '②', '增强', '= 混凝土里放钢筋', S_('G1'), at('G1', '像'));
+  const tFib = S_('G2'), tProd = at('G2', '很多'), tFloat = at('G3', '浮纤');
+  if (t < tFib) {
+    const s = pop(t, at('G1', '混凝土'), 0.3);
+    if (s > 0) {
+      g.save(); g.translate(740, 1150); g.scale(s * 1.4, s * 1.4);
+      panel(g, 0, 0, 380, 300, '#a9a9a9', C.outline, 10);
+      const R = rng(2); g.fillStyle = '#8a8a8a'; for (let i = 0; i < 30; i++) g.fillRect(-170 + R() * 330, -130 + R() * 250, 12, 12);
+      if (t > at('G1', '钢筋')) { g.fillStyle = '#8b3a1a'; for (const y of [-80, 0, 80]) g.fillRect(-180, y - 8, 360, 16); for (const x of [-100, 0, 100]) g.fillRect(x - 8, -140, 16, 280); }
+      g.restore();
+    }
+  } else if (t < tProd) {
+    drawCup(g, 740, 1430, 17, { label: 'PA', tea: '#e8e0c8', fibers: t > tFib + 0.5 });
+    const R = rng(8);
+    for (let i = 0; i < 8; i++) { const t0 = tFib + i * 0.07, k = seg(t, t0, t0 + 0.45); if (k <= 0 || k >= 1) continue; g.fillStyle = '#f5f5f5'; g.save(); g.translate(640 + R() * 160, lerp(700, 1150, easeIn(k))); g.rotate(0.6 + R()); g.fillRect(-30, -4, 60, 8); g.restore(); }
+    chip(g, '玻璃纤维', 740, 760, pop(t, tFib + 0.2), '#ffffff', C.outline, 18, 4);
+    chip(g, '强度↑', 600, 870, pop(t, at('G2', '强度')), C.blue);
+    chip(g, '刚性↑', 880, 870, pop(t, at('G2', '刚性')), C.blue);
+  } else {
+    const bob = Math.sin(t * 3) * 8;
+    sprite(g, 'drill', 740, 1190 + bob, 22);
+    chip(g, '尼龙 + 玻纤', 740, 740, pop(t, at('G2', '尼龙')), C.blue);
+    if (t > tFloat) {
+      const R = rng(12); g.fillStyle = '#ffffff';
+      for (let i = 0; i < 24; i++) g.fillRect(560 + R() * 340, 1060 + R() * 110 + bob, 22, 5);
+      chip(g, '浮纤？', 740, 860, pop(t, tFloat) * (1 + 0.05 * Math.sin(t * 10)), C.red, C.yellow, 26, 5);
+    }
+    const tc = at('G3', '评论区');
+    if (t > tc) { const s = pop(t, tc); g.save(); g.translate(740, 970); g.scale(s, s); sprite(g, 'bubble', -170, 0, 8); g.restore(); chip(g, '评论区聊聊', 780, 970, s, '#3bb273'); }
+  }
+  poof(g, 720, 1200, t, tProd);
+  drawCat(g, 260, 1520, 11, { apron: true, eyes: t > tFloat && t < tFloat + 1 ? 'sad' : 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile', armR: [3, -4], shadowY: 1520 });
+};
+cue(at('G1', '混凝土'), 'thud'); cue(at('G1', '钢筋'), 'clank'); cue(S_('G2'), 'drops'); cue(at('G2', '强度'), 'pop'); cue(at('G2', '刚性'), 'pop');
+cue(at('G2', '很多'), 'poof'); cue(at('G3', '浮纤'), 'stamp'); cue(at('G3', '评论区'), 'pop');
+
+scene.tough = (g, t) => {
+  bgShop(g, t);
+  topicHeader(g, t, '③', '增韧', '= 加一层奶盖', S_('U1'), at('U1', '像'));
+  const tSponge = at('U2', '减震海绵'), tCar = S_('U3'), tHit = at('U3', '撞不碎'), tCold = at('U3', '冬天');
+  if (t < tCar) {
+    drawCup(g, 740, 1430, 17, { label: 'PP', tea: '#c9a27a', foam: t > at('U1', '奶盖'), rot: Math.sin(t * 4) * 0.02 });
+    chip(g, 'POE', 600, 760, pop(t, at('U2', 'P O E')), '#ffffff', C.outline);
+    chip(g, 'EPDM', 880, 760, pop(t, at('U2', 'E P D M')), '#ffffff', C.outline);
+    if (t > tSponge) { const sq = 1 - 0.25 * Math.abs(Math.sin((t - tSponge) * 6)); sprite(g, 'sponge', 740, 880, 14, { sy: sq }); }
+  } else {
+    sprite(g, 'car', 720, 1220, 20, { map: t > tCar + 0.3 ? { G: '#3bb273' } : {} });
+    chip(g, '保险杠', 720, 1390, pop(t, tCar + 0.3), '#3bb273');
+    const k = seg(t, tHit - 0.3, tHit);
+    const ang = t < tHit ? lerp(-1.2, 0.2, easeIn(k)) : lerp(0.2, -0.6, easeOut(seg(t, tHit, tHit + 0.3)));
+    if (t < tHit + 1.2) sprite(g, 'hammer', 990, 1130, 14, { rot: ang });
+    if (t > tHit) { chip(g, '撞不碎！', 720, 830, pop(t, tHit), C.red, C.yellow, 24, 5); sparkle(g, 700, 1280, t, 4, 6, 200); }
+    if (t > tCold) { chip(g, '零下也不脆', 720, 960, pop(t, tCold), C.blue); const R = rng(6); for (let i = 0; i < 6; i++) sprite(g, 'snow', 420 + R() * 600, ((t * 150 + R() * 900) % 900) + 650, 5); }
+  }
+  poof(g, 720, 1250, t, tCar);
+  drawCat(g, 260, 1520, 11, { apron: true, eyes: 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile', armR: [3, -4], shadowY: 1520 });
+};
+cue(at('U1', '奶盖'), 'pop'); cue(at('U2', 'P O E'), 'pop'); cue(at('U2', 'E P D M'), 'pop'); cue(at('U2', '减震海绵'), 'boing');
+cue(S_('U3'), 'poof'); cue(at('U3', '撞不碎'), 'bonk'); cue(at('U3', '冬天'), 'pop');
+
+scene.fr = (g, t) => {
+  bgShop(g, t);
+  topicHeader(g, t, '④', '阻燃', '= 穿上防火服', S_('R1'), at('R1', '等于'));
+  const tSuit = at('R1', '防火服'), tFire = at('R1', '火一离开'), tOut = at('R1', '自己就灭'), tProd = S_('R2'), tV0 = at('R2', 'V零');
+  if (t < tProd) {
+    drawCup(g, 740, 1430, 17, { label: 'PC', tea: '#a8c8e8', suit: seg(t, tSuit, tSuit + 0.3) });
+    if (t > tFire && t < tOut + 0.1) sprite(g, Math.floor(t * 8) % 2 ? 'flame1' : 'flame2', 740, 1280, 16);
+    if (t > tOut) { poof(g, 740, 1250, t, tOut, 160); chip(g, '火走自灭', 740, 820, pop(t, tOut), C.red, C.yellow, 22, 4); }
+  } else {
+    const items = [['socket', 470, at('R2', '插座')], ['charger', 720, at('R2', '充电器')], ['washer', 960, at('R2', '家电')]];
+    for (const [n, x, t0] of items) { const s = pop(t, t0); if (s > 0) { g.save(); g.translate(x, 1180); g.scale(s, s); sprite(g, n, 0, 0, n === 'charger' ? 20 : 14); g.restore(); } }
+    if (t > tV0) {
+      const k = seg(t, tV0, tV0 + 0.18), s = lerp(3, 1, easeOut(k));
+      g.save(); g.translate(720, 860); g.rotate(-0.06); g.scale(s, s); g.globalAlpha = clamp(k * 2);
+      panel(g, 0, 0, 380, 150, C.red, C.outline, 12); drawCentered(g, pixelText('V-0', 30, 6, C.yellow), 0, 0); g.restore();
+    }
+  }
+  drawCat(g, 260, 1520, 11, { apron: true, eyes: 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile', armR: [3, -4], shadowY: 1520 });
+};
+cue(at('R1', '防火服'), 'whoosh'); cue(at('R1', '火一离开'), 'fire'); cue(at('R1', '自己就灭'), 'poof');
+cue(at('R2', '插座'), 'pop'); cue(at('R2', '充电器'), 'pop'); cue(at('R2', '家电'), 'pop'); cue(at('R2', 'V零'), 'stamp');
+
+scene.menu = (g, t) => {
+  bgShop(g, t);
+  const items = [['耐候抗UV', at('M1', '耐候')], ['抗静电', at('M1', '抗静电')], ['耐高温', at('M1', '耐高温')], ['导电', at('M1', '几十种')], ['耐磨', at('M1', '几十种') + 0.2], ['抗菌', at('M1', '几十种') + 0.4]];
+  boardText(g, [{ text: '隐藏菜单', t0: S_('M1') - 0.2, size: 32, scale: 6, color: C.yellow, gap: 150 }], t);
+  items.forEach(([txt, t0], i) => chip(g, txt, i % 2 ? 800 : 300, 330 + Math.floor(i / 2) * 105, pop(t, t0), ['#3bb273', C.blue, C.red, '#9b6bd6', C.orange, '#2a9d8f'][i], '#ffffff', 20, 4));
+  if (t > at('M1', '按需定制')) title(g, '按需定制！', 720, 960, pop(t, at('M1', '按需定制')), C.red, 30, 6);
+  drawCup(g, 760, 1430, 14, { label: '定制', tea: '#d9a3c6', pearls: true, foam: true, ice: 0.3, rot: Math.sin(t * 4) * 0.03 });
+  drawCat(g, 260, 1520, 11, { apron: true, eyes: 'happy', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile', armR: [-1.5, -10 + Math.sin(t * 12) * 2], shadowY: 1520 });
+};
+for (const w of ['耐候', '抗静电', '耐高温', '几十种']) cue(at('M1', w), 'pop');
+cue(at('M1', '按需定制'), 'ding');
+
+scene.ext = (g, t) => {
+  bgFactory(g);
+  title(g, '双螺杆挤出机', 540, 200, pop(t, S_('E1')), C.cream, 28, 6);
+  chip(g, '= 超长摇摇机', 540, 330, pop(t, at('E1', '就像')), C.orange);
+  const tIn = at('E2', '一起进去'), tHeat = at('E2', '加热'), tMix = at('E2', '螺杆'), tStr = at('E3', '料条'), tCool = at('E3', '过水'), tCut = at('E3', '切成'), tInj = at('E3', '注塑机');
+  g.save(); g.translate(0, 120);
+  // 料斗
+  panel(g, 160, 560, 160, 40, '#c9d1da');
+  g.fillStyle = C.outline; g.beginPath(); g.moveTo(70, 440); g.lineTo(250, 440); g.lineTo(190, 560); g.lineTo(130, 560); g.closePath(); g.fill();
+  g.fillStyle = '#e7ecf2'; g.beginPath(); g.moveTo(84, 448); g.lineTo(236, 448); g.lineTo(184, 552); g.lineTo(136, 552); g.closePath(); g.fill();
+  if (t > tIn - 0.3) { const R = rng(1); for (let i = 0; i < 10; i++) { const ph = ((t * 1.2 + R()) % 1); g.fillStyle = i % 3 ? '#f4f1e6' : (i % 2 ? '#ffffff' : '#2f6fde'); g.fillRect(110 + R() * 100, 380 + ph * 170, 16, 16); } }
+  // 料筒 + 螺杆
+  panel(g, 520, 640, 820, 120, '#c9d1da');
+  g.save(); g.beginPath(); g.rect(120, 600, 800, 80); g.clip();
+  const spd = t > tMix ? 240 : 80;
+  g.fillStyle = '#7d8a99'; g.fillRect(120, 600, 800, 80);
+  g.fillStyle = '#c0c8d2'; for (let x = 100 + ((t * spd) % 60); x < 940; x += 60) { g.beginPath(); g.moveTo(x, 600); g.lineTo(x + 24, 600); g.lineTo(x - 6, 680); g.lineTo(x - 30, 680); g.closePath(); g.fill(); }
+  if (t > tHeat) { g.fillStyle = `rgba(255,90,40,${0.25 + 0.15 * Math.sin(t * 8)})`; g.fillRect(400, 600, 520, 80); }
+  g.restore();
+  for (let i = 0; i < 6; i++) { g.fillStyle = t > tHeat ? (Math.floor(t * 4 + i) % 2 ? '#ff5a28' : C.red) : '#8b3a1a'; g.fillRect(330 + i * 100, 588, 40, 104); }
+  panel(g, 950, 640, 70, 90, '#7d8a99');   // 机头
+  // 料条 → 水槽 → 切粒
+  const strand = seg(t, tStr - 0.3, tStr + 0.6);
+  if (strand > 0) {
+    const cols = ['#ff8a3d', '#ff8a3d', '#ff8a3d'];
+    for (let i = 0; i < 3; i++) {
+      g.fillStyle = cols[i];
+      const x = 975 + i * 18, len = strand * 420;
+      g.fillRect(x - 5, 680, 10, Math.min(len, 300));
+      if (len > 300) { const ll = Math.min((len - 300) * 2, 760); g.fillRect(x - ll, 975 + i * 18, ll, 10); }
+    }
+  }
+  panel(g, 600, 1010, 820, 90, '#4fa3e0', C.outline, 8);   // 水槽
+  g.fillStyle = 'rgba(255,255,255,0.35)'; for (let x = 200 + ((t * 120) % 80); x < 1000; x += 80) g.fillRect(x, 975, 30, 6);
+  // 切粒机
+  panel(g, 140, 1010, 150, 170, '#e7ecf2');
+  g.save(); g.translate(140, 1010); g.rotate(t > tCut ? t * 18 : 0); g.fillStyle = '#7d8a99'; g.fillRect(-50, -8, 100, 16); g.fillRect(-8, -50, 16, 100); g.restore();
+  if (t > tCut) { const R = rng(5); for (let i = 0; i < 12; i++) { const ph = (t * 1.5 + R()) % 1; pellet(g, 120 + R() * 50, 1110 + ph * 110, 22, '#ff8a3d', R() * 3); } }
+  // 注塑机
+  g.restore();
+  injMachine(g, 50, 1290, 0.5, t, t > tInj);
+  const labels = [['① 加料', 380, 560, tIn], ['② 加热熔化', 620, 640, tHeat], ['③ 螺杆搅匀', 520, 880, tMix], ['④ 拉条', 900, 980, tStr], ['⑤ 水冷', 600, 1230, tCool], ['⑥ 切粒', 330, 1320, tCut], ['⑦ 去注塑', 560, 1420, tInj]];
+  for (const [txt, x, y, t0] of labels) chip(g, txt, x, y, pop(t, t0), '#ffffff', C.outline, 18, 4);
+  drawCat(g, 900, 1570, 8, { hat: 'helmet', eyes: 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile', armL: [-1, -9], shadowY: 1570 });
+};
+cue(at('E2', '一起进去'), 'drops'); cue(at('E2', '加热'), 'whoosh'); cue(at('E2', '螺杆'), 'machine');
+cue(at('E3', '料条'), 'pop'); cue(at('E3', '过水'), 'water'); cue(at('E3', '切成'), 'cut'); cue(at('E3', '注塑机'), 'ding');
+
+scene.debate = (g, t) => {
+  bgSunny(g, t, '#f3e9ff', '#b38cf0');
+  const tQ = at('D2', '值不值'), tMoney = at('D3', '省下的'), tClient = at('D3', '丢掉的'), tSide = at('D3', '你站哪边');
+  title(g, '老板们评评理', 540, 230, pop(t, S_('D1')), C.cream, 28, 6);
+  if (t > tQ && t < tSide) title(g, '值不值？', 540, 430, pop(t, tQ), C.yellow, 34, 7);
+  const tilt = t < S_('D2') ? 0 : Math.sin((t - S_('D2')) * 2.2) * 0.12;
+  g.save(); g.translate(540, 1300); g.rotate(tilt);
+  g.fillStyle = C.outline; g.fillRect(-460, -20, 920, 40); g.fillStyle = '#c98a4b'; g.fillRect(-452, -12, 904, 24);
+  const sL = pop(t, at('D2', '回料')), sR = pop(t, at('D2', '加大填充') + 0.3);
+  if (sL > 0) { g.save(); g.translate(-330, -170); g.scale(sL, sL); sprite(g, 'bag', 0, 0, 16); drawCentered(g, pixelText('回料', 18, 4, '#7a4a25', '#ffffff', false), 0, 20); g.restore(); }
+  if (sR > 0) { g.save(); g.translate(330, -170); g.scale(sR, sR); sprite(g, 'bag', 0, 0, 16, { map: { c: '#ffffff' } }); drawCentered(g, pixelText('新料', 18, 4, C.blue, '#ffffff', false), 0, 20); g.restore(); }
+  g.restore();
+  g.fillStyle = C.outline; g.beginPath(); g.moveTo(540, 1300); g.lineTo(470, 1450); g.lineTo(610, 1450); g.closePath(); g.fill();
+  chip(g, '省下的是钱', 250, 700, pop(t, tMoney), '#3bb273', '#ffffff', 20, 4);
+  chip(g, '丢掉的是客户', 830, 700, pop(t, tClient), C.red, C.yellow, 20, 4);
+  if (t > tSide) {
+    title(g, '你站哪边？', 540, 430, pop(t, tSide), C.yellow, 32, 7);
+    const b = Math.sin(t * 8) * 12;
+    sprite(g, 'arrowL', 150 + b, 900, 10); sprite(g, 'arrowR', 930 - b, 900, 10);
+    chip(g, '评论区见', 540, 870, pop(t, tSide + 0.4), '#3bb273');
+  }
+  drawCat(g, 540, 1280 + 20, 8, { eyes: t > tQ && t < tQ + 0.8 ? 'sad' : 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile',
+    armL: [-1, -6 + Math.sin(t * 5) * 2], armR: [1, -6 - Math.sin(t * 5) * 2] });
+};
+cue(at('D2', '回料'), 'pop'); cue(at('D2', '加大填充') + 0.3, 'pop'); cue(at('D2', '值不值'), 'stamp');
+cue(at('D3', '省下的'), 'coin'); cue(at('D3', '丢掉的'), 'pop'); cue(at('D3', '你站哪边'), 'ding');
+
+scene.end = (g, t) => {
+  bgShop(g, t);
+  const tEq = S_('N1'), tMorph = at('N1', '变身'), tChips = S_('N2'), tDM = S_('N3'), tFollow = S_('N4');
+  if (t < tChips) {
+    boardText(g, [{ text: '一句话总结', t0: tEq, size: 26, scale: 5, color: C.yellow, gap: 130 },
+      { text: '改性塑料 =', t0: at('N1', '改性塑料'), gap: 110 }, { text: '基础塑料 + 定制配方', t0: at('N1', '基础塑料'), color: '#ffd9a0' }], t);
+    if (t < tMorph) drawCup(g, 760, 1430, 15, { label: 'PP', tea: '#c9a27a', pearls: true, foam: true });
+    else { const s = pop(t, tMorph, 0.35); pellet(g, 760, 1150, 360 * s, '#ff8a3d', Math.sin(t * 2) * 0.2); sparkle(g, 760, 1200, t, 3, 10, 220); }
+    poof(g, 760, 1250, t, tMorph);
+  } else if (t < tDM) {
+    boardText(g, [{ text: '你们厂最头疼哪种料？', t0: tChips, size: 26, scale: 5, color: C.yellow, gap: 150 }], t);
+    chip(g, '开裂', 260, 450, pop(t, at('N2', '开裂')), C.red, '#ffffff', 24, 5);
+    chip(g, '变形', 540, 450, pop(t, at('N2', '变形')), C.orange, '#ffffff', 24, 5);
+    chip(g, '浮纤', 820, 450, pop(t, at('N2', '浮纤')), C.blue, '#ffffff', 24, 5);
+    const tc = at('N2', '评论区');
+    if (t > tc) { const s = pop(t, tc); g.save(); g.translate(560, 1050); g.scale(s, s); sprite(g, 'bubble', -230, 0, 10); g.restore(); chip(g, '评论区打出来', 620, 1050, s, '#3bb273', '#ffffff', 22, 4); }
+    if (t > at('N2', '下期')) chip(g, '下期00猫挑一个讲', 700, 1200, pop(t, at('N2', '下期')), '#ffffff', C.outline, 18, 4);
+  } else {
+    boardText(g, [{ text: '选料 · 打样', t0: tDM, size: 30, scale: 6, color: C.yellow, gap: 150 }], t);
+    const sDM = pop(t, at('N3', '私信'));
+    if (sDM > 0) {
+      g.save(); g.translate(540, 470); g.scale(sDM, sDM); panel(g, 0, 0, 640, 150, '#3bb273', C.outline, 10);
+      drawCentered(g, pixelText('私信00猫', 30, 5, '#ffffff'), 0, 0); g.restore();
+      const ck = seg(t, at('N3', '私信') + 0.3, at('N3', '私信') + 0.8);
+      if (ck > 0 && t < tFollow) sprite(g, 'cursor', lerp(900, 640, easeOut(ck)), lerp(700, 520, easeOut(ck)), 9);
+    }
+    if (t > tFollow) {
+      const s = pop(t, at('N4', '关注')) * (1 + 0.06 * Math.sin(t * 9));
+      g.save(); g.translate(760, 1110); g.scale(s, s); panel(g, 0, 0, 360, 130, C.red, C.outline, 10);
+      drawCentered(g, pixelText('+ 关注', 28, 5, '#ffffff'), 0, 0); g.restore();
+      if (t > at('N4', '下期见')) { title(g, '下期见！', 760, 830, pop(t, at('N4', '下期见')), C.red, 30, 6); sprite(g, 'heart', 940, 790 - ((t * 60) % 80), 7); }
+    }
+  }
+  const wave = t > tFollow;
+  drawCat(g, 260, 1520, 11, { apron: true, eyes: wave && Math.sin(t * 6) > 0.7 ? 'happy' : 'open', mouth: t < E_('N4') && Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile',
+    armR: wave ? [-1.5, -10 + Math.sin(t * 16) * 2.5] : [3, -4], shadowY: 1520 });
+};
+cue(at('N1', '改性塑料'), 'pop'); cue(at('N1', '基础塑料'), 'pop'); cue(at('N1', '变身'), 'poof'); cue(at('N1', '变身') + 0.1, 'ding');
+cue(at('N2', '开裂'), 'pop'); cue(at('N2', '变形'), 'pop'); cue(at('N2', '浮纤'), 'pop'); cue(at('N2', '评论区'), 'pop');
+cue(at('N3', '私信'), 'pop'); cue(at('N3', '私信') + 0.8, 'click'); cue(at('N4', '关注'), 'stamp'); cue(at('N4', '下期见'), 'ding');
+
+// 嘴巴：只在念台词时动
+const talking = t => TL.lines.some(l => t >= l.start && t <= l.end);
+
+// ---------- 换场：像素方块转场 ----------
+function transition(g, t) {
+  for (let i = 1; i < SCENES.length; i++) {
+    if (SCENES[i - 1].name === 'hook') continue;
+    const b = SCENES[i].from, k = (t - (b - 0.25)) / 0.5;
+    if (k <= 0 || k >= 1) continue;
+    const cover = 1 - Math.abs(k * 2 - 1);  // 0→1→0
+    const bs = 90;
+    for (let y = 0; y < H; y += bs) for (let x = 0; x < W; x += bs) {
+      const d = ((x / W) + (y / H)) / 2, s = clamp(cover * 2.2 - d * 1.2) * bs;
+      if (s <= 0) continue;
+      g.fillStyle = ((x + y) / bs) % 2 ? C.outline : '#6b3a22';
+      g.fillRect(x + (bs - s) / 2, y + (bs - s) / 2, s, s);
+    }
+  }
+}
+SCENES.slice(1).forEach((s, i) => { if (SCENES[i].name !== 'hook') cue(s.from - 0.2, 'whoosh', 0.6); });
+
+// ---------- 画一帧 ----------
+const _drawCat = drawCat;
+function render(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  const sc = sceneAt(t);
+  const quiet = !talking(t);
+  drawCat = (g, x, y, S, pose = {}) => _drawCat(g, x, y, S, quiet && pose.mouth === 'open' && !pose.keepMouth ? { ...pose, mouth: 'smile' } : pose);
+  scene[sc.name](ctx, t);
+  drawCat = _drawCat;
+  const sub = SUBS.find(s => t >= s.start && t < s.end);
+  if (sub && !(t > TL.splice - 0.01 && t < TL.splice + 0.3)) subtitle(ctx, sub.text);
+  transition(ctx, t);
+}
+window.render = render;
+window.DURATION = DURATION;
+window.CUES = CUES;
+window.ready = document.fonts ? document.fonts.ready : Promise.resolve();
+if (!new URLSearchParams(location.search).has('render')) {
+  const start = performance.now();
+  (function loop() { render(((performance.now() - start) / 1000) % DURATION); requestAnimationFrame(loop); })();
+}
+</script>
+</body>
+</html>
