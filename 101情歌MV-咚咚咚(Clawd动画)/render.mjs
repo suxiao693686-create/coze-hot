@@ -36,6 +36,9 @@ function playwrightChromes() {
 const CHROME = CHROMES.find(p => p && existsSync(p));
 if (!CHROME) { console.error('Chrome not found: pass --chrome=<path> or set CHROME_PATH'); process.exit(1); }
 const fps = +(args.fps || 24), FRAMES_DIR = 'out/frames';
+// --toff=s shifts the sampled time of each --frames frame. Rendering on twos: --fps=12 --toff=0.0417 samples the middle
+// of each two-frame slot, so a hit on the beat is never more than half a drawing away from its sound.
+const toff = +(args.toff || 0);
 const run = (cmd, a) => new Promise((ok, bad) => { const p = spawn(cmd, a, { stdio: 'inherit' }); p.on('close', c => c ? bad(new Error(cmd + ' exited ' + c)) : ok()); });
 const times = s => String(s).split(',').map(Number);
 const span = s => String(s).split(':').map(Number);
@@ -126,7 +129,7 @@ if (args.sheet || args.strip) {
     const page = await openPage('#' + w);
     while (next < todo.length) {
       const i = todo[next++], f = `${FRAMES_DIR}/f${String(i).padStart(5, '0')}.jpg`;
-      const buf = await frameOf(page, i / fps, 'image/jpeg', .94);
+      const buf = await frameOf(page, i / fps + toff, 'image/jpeg', .94);
       writeFileSync(f + '.tmp', buf); renameSync(f + '.tmp', f);
       if (++done % 24 === 0 || done === todo.length) {
         const el = (Date.now() - start) / 1000;
