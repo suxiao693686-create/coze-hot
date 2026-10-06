@@ -92,6 +92,8 @@ for l in TL['lines']:
     add(voice, v / np.max(np.abs(v)) * 0.8, l['start'])
 
 # 说话时音乐和音效自动让路；片头插入点前后音乐淡出淡入
+NO_VOICE = os.environ.get('NO_VOICE') == '1'   # 只要音乐+音效，不要人声
+if NO_VOICE: voice[:] = 0
 duck = np.clip(lp((np.abs(voice) > 0.01).astype(float), 0.0005) * 3, 0, 1)
 gate = np.ones(N); sp = int(TL['splice'] * SR); fade = int(0.4 * SR)
 gate[sp - fade:sp] = np.linspace(1, 0, fade); gate[sp:sp + fade] = np.linspace(0, 1, fade)
@@ -99,6 +101,7 @@ out = music * gate * (1 - 0.75 * duck) * 0.8 + sfx * (1 - 0.4 * duck) + voice * 
 out = out[:int(DUR * SR)]
 f = int(0.8 * SR); out[-f:] *= np.linspace(1, 0, f)
 out = np.tanh(out / np.max(np.abs(out)) * 1.0) / np.tanh(1.0) * 0.9
+if NO_VOICE: out *= 0.55   # 给后配的人声留出音量空间
 with wave.open(out_path, 'wb') as w:
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes((out * 32767).astype(np.int16).tobytes())

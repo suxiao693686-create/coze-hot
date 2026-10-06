@@ -1,7 +1,7 @@
 """合成片头的背景音乐 + 音效，并混入配音。
 用法: python3 audio.py 开模.wav 标题.wav 输出.wav
 节拍: 150 BPM，一拍 0.4 秒，从 0.05 秒起算；开模 2.05 秒正好落在拍子上。"""
-import sys, wave
+import os, sys, wave
 import numpy as np
 
 SR = 44100
@@ -135,12 +135,15 @@ voice = np.zeros_like(mix)
 for path, t in ((sys.argv[1], 1.45), (sys.argv[2], 2.45)):
     v = load(path); v = v / np.max(np.abs(v)) * 0.75
     i0 = int(t * SR); voice[i0:i0 + len(v)] += v[:len(voice) - i0]
+NO_VOICE = os.environ.get('NO_VOICE') == '1'   # 只要音乐+音效，不要人声
+if NO_VOICE: voice[:] = 0
 duck = onepole((np.abs(voice) > 0.01).astype(float), 0.0008)
 duck = np.clip(duck * 3, 0, 1)
 out = 0.45 * music * (1 - 0.75 * duck) + mix * (1 - 0.7 * duck) + voice * 1.8
 out = out[:int(SR * DUR)]
 fade = int(0.3 * SR); out[-fade:] *= np.linspace(1, 0, fade)
 out = np.tanh(out / np.max(np.abs(out)) * 0.8) / np.tanh(0.8) * 0.9   # 轻微饱和，听着更饱满
+if NO_VOICE: out *= 0.55   # 给后配的人声留出音量空间
 with wave.open(sys.argv[3], 'wb') as w:
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes((out * 32767).astype(np.int16).tobytes())
