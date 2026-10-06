@@ -1,0 +1,6 @@
+node_modules
+out/check
+out/frames
+out/logs
+music/*.wav
+assets/*.wav
