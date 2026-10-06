@@ -5,19 +5,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 WORK=${WORK:-../build}
 OUT=${OUT:-第01课_什么是改性塑料.mp4}
-export TTS_MODEL=${TTS_MODEL:-$WORK/kokoro-multi-lang-v1_1}
-mkdir -p "$WORK/l1raw" "$WORK/l1"
+export MODELS=${MODELS:-$WORK}
+mkdir -p "$WORK/l2raw" "$WORK/l1"
 
 # 1) 片头（没有就先生成）
 [ -f ../00猫片头.mp4 ] || (cd .. && WORK="$WORK" bash build.sh)
 
-# 2) 配音：每句一个文件，正常语速
+# 2) 配音：ZipVoice 每句生成几遍挑最准的（已经生成过的会跳过）
 python3 - <<PY
 import json, subprocess, os
 for l in json.load(open('script.json')):
-    raw = f"$WORK/l1raw/{l['id']}.wav"
+    raw = f"$WORK/l2raw/{l['id']}.wav"
     if not os.path.exists(raw):
-        subprocess.run(['python3', '../tts.py', l['say'], raw, '1.15'], check=True, capture_output=True)
+        subprocess.run(['python3', '../tts_zip.py', l['say'], raw, '1.0', '3'], check=True, capture_output=True)
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', raw, '-af',
         'aresample=44100,highpass=f=100,equalizer=f=3200:t=q:w=1.2:g=3,acompressor=threshold=-18dB:ratio=3:attack=8:release=100:makeup=3',
         '-ar', '44100', '-ac', '1', f"$WORK/l1/{l['id']}.wav"], check=True)

@@ -1,5 +1,5 @@
 """合成片头的背景音乐 + 音效，并混入配音。
-用法: python3 audio.py 喵喵.wav 开模.wav 标题.wav 输出.wav
+用法: python3 audio.py 开模.wav 标题.wav 输出.wav
 节拍: 150 BPM，一拍 0.4 秒，从 0.05 秒起算；开模 2.05 秒正好落在拍子上。"""
 import sys, wave
 import numpy as np
@@ -65,7 +65,7 @@ for i, n in enumerate(sneak):
     if i % 4 == 2: add(music, clap(), t, 0.15)
 # 舔爪子“啵啵”
 for k in range(4): add(mix, np.sin(sweep(800, 1500, 0.05)) * env(0.05), 0.3 + k * 2 / 7, 0.14)
-# 喵喵 + “！” 弹出
+# “！” 弹出
 add(mix, pop(), 1.0, 0.3)
 add(mix, square(freq('E6'), 0.08, 0.5) * env(0.08), 1.05, 0.08); add(mix, square(freq('A6'), 0.1, 0.5) * env(0.1), 1.11, 0.08)
 # 起跳 boing
@@ -132,7 +132,7 @@ def load(path):
         assert w.getframerate() == SR, w.getframerate()
         return np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(float) / 32768
 voice = np.zeros_like(mix)
-for path, t in ((sys.argv[1], 1.0), (sys.argv[2], 1.45), (sys.argv[3], 2.52)):
+for path, t in ((sys.argv[1], 1.45), (sys.argv[2], 2.45)):
     v = load(path); v = v / np.max(np.abs(v)) * 0.75
     i0 = int(t * SR); voice[i0:i0 + len(v)] += v[:len(voice) - i0]
 duck = onepole((np.abs(voice) > 0.01).astype(float), 0.0008)
@@ -141,7 +141,7 @@ out = 0.45 * music * (1 - 0.75 * duck) + mix * (1 - 0.7 * duck) + voice * 1.8
 out = out[:int(SR * DUR)]
 fade = int(0.3 * SR); out[-fade:] *= np.linspace(1, 0, fade)
 out = np.tanh(out / np.max(np.abs(out)) * 0.8) / np.tanh(0.8) * 0.9   # 轻微饱和，听着更饱满
-with wave.open(sys.argv[4], 'wb') as w:
+with wave.open(sys.argv[3], 'wb') as w:
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes((out * 32767).astype(np.int16).tobytes())
-print('wrote', sys.argv[4])
+print('wrote', sys.argv[3])

@@ -506,8 +506,8 @@ scene.tough = (g, t) => {
   const tSponge = at('U2', '减震海绵'), tCar = S_('U3'), tHit = at('U3', '撞不碎'), tCold = at('U3', '冬天');
   if (t < tCar) {
     drawCup(g, 740, 1430, 17, { label: 'PP', tea: '#c9a27a', foam: t > at('U1', '奶盖'), rot: Math.sin(t * 4) * 0.02 });
-    chip(g, 'POE', 600, 760, pop(t, at('U2', 'P O E')), '#ffffff', C.outline);
-    chip(g, 'EPDM', 880, 760, pop(t, at('U2', 'E P D M')), '#ffffff', C.outline);
+    chip(g, 'POE', 600, 760, pop(t, at('U2', 'P-O-E')), '#ffffff', C.outline);
+    chip(g, 'EPDM', 880, 760, pop(t, at('U2', 'EPDM')), '#ffffff', C.outline);
     if (t > tSponge) { const sq = 1 - 0.25 * Math.abs(Math.sin((t - tSponge) * 6)); sprite(g, 'sponge', 740, 880, 14, { sy: sq }); }
   } else {
     sprite(g, 'car', 720, 1220, 20, { map: t > tCar + 0.3 ? { G: '#3bb273' } : {} });
@@ -521,7 +521,7 @@ scene.tough = (g, t) => {
   poof(g, 720, 1250, t, tCar);
   drawCat(g, 260, 1520, 11, { apron: true, eyes: 'open', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile', armR: [3, -4], shadowY: 1520 });
 };
-cue(at('U1', '奶盖'), 'pop'); cue(at('U2', 'P O E'), 'pop'); cue(at('U2', 'E P D M'), 'pop'); cue(at('U2', '减震海绵'), 'boing');
+cue(at('U1', '奶盖'), 'pop'); cue(at('U2', 'P-O-E'), 'pop'); cue(at('U2', 'EPDM'), 'pop'); cue(at('U2', '减震海绵'), 'boing');
 cue(S_('U3'), 'poof'); cue(at('U3', '撞不碎'), 'bonk'); cue(at('U3', '冬天'), 'pop');
 
 scene.fr = (g, t) => {
@@ -549,9 +549,8 @@ cue(at('R2', '插座'), 'pop'); cue(at('R2', '充电器'), 'pop'); cue(at('R2', 
 scene.menu = (g, t) => {
   bgShop(g, t);
   const items = [['耐候抗UV', at('M1', '耐候')], ['抗静电', at('M1', '抗静电')], ['耐高温', at('M1', '耐高温')], ['导电', at('M1', '几十种')], ['耐磨', at('M1', '几十种') + 0.2], ['抗菌', at('M1', '几十种') + 0.4]];
-  boardText(g, [{ text: '隐藏菜单', t0: S_('M1') - 0.2, size: 32, scale: 6, color: C.yellow, gap: 150 }], t);
-  items.forEach(([txt, t0], i) => chip(g, txt, i % 2 ? 800 : 300, 330 + Math.floor(i / 2) * 105, pop(t, t0), ['#3bb273', C.blue, C.red, '#9b6bd6', C.orange, '#2a9d8f'][i], '#ffffff', 20, 4));
-  if (t > at('M1', '按需定制')) title(g, '按需定制！', 720, 960, pop(t, at('M1', '按需定制')), C.red, 30, 6);
+  boardText(g, [{ text: '隐藏菜单', t0: S_('M1') - 0.2, size: 32, scale: 6, color: C.yellow, gap: 190 }, { text: '按需定制！', t0: at('M1', '按需定制'), size: 30, scale: 6, color: '#ffd9a0' }], t);
+  items.forEach(([txt, t0], i) => chip(g, txt, i % 2 ? 790 : 290, 730 + Math.floor(i / 2) * 120, pop(t, t0), ['#3bb273', C.blue, C.red, '#9b6bd6', C.orange, '#2a9d8f'][i], '#ffffff', 22, 3));
   drawCup(g, 760, 1430, 14, { label: '定制', tea: '#d9a3c6', pearls: true, foam: true, ice: 0.3, rot: Math.sin(t * 4) * 0.03 });
   drawCat(g, 260, 1520, 11, { apron: true, eyes: 'happy', mouth: Math.floor(t * 7) % 3 === 0 ? 'open' : 'smile', armR: [-1.5, -10 + Math.sin(t * 12) * 2], shadowY: 1520 });
 };
@@ -640,7 +639,11 @@ scene.end = (g, t) => {
     boardText(g, [{ text: '一句话总结', t0: tEq, size: 26, scale: 5, color: C.yellow, gap: 130 },
       { text: '改性塑料 =', t0: at('N1', '改性塑料'), gap: 110 }, { text: '基础塑料 + 定制配方', t0: at('N1', '基础塑料'), color: '#ffd9a0' }], t);
     if (t < tMorph) drawCup(g, 760, 1430, 15, { label: 'PP', tea: '#c9a27a', pearls: true, foam: true });
-    else { const s = pop(t, tMorph, 0.35); pellet(g, 760, 1150, 360 * s, '#ff8a3d', Math.sin(t * 2) * 0.2); sparkle(g, 760, 1200, t, 3, 10, 220); }
+    else {
+      const s = pop(t, tMorph, 0.35), R = rng(21);
+      for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2, d = i === 0 ? 0 : 110; pellet(g, 760 + Math.cos(a) * d * s, 1200 + Math.sin(a) * d * 0.7 * s + Math.sin(t * 4 + i) * 6, (i === 0 ? 130 : 80) * s, PELLET_COLORS[[6, 2, 3, 4, 5, 0, 7, 6, 2][i]], R() * 2 + Math.sin(t * 2 + i) * 0.2); }
+      sparkle(g, 760, 1200, t, 3, 10, 240); chip(g, '你的专属配方粒子', 640, 980, s, C.red, C.yellow, 22, 3);
+    }
     poof(g, 760, 1250, t, tMorph);
   } else if (t < tDM) {
     boardText(g, [{ text: '你们厂最头疼哪种料？', t0: tChips, size: 26, scale: 5, color: C.yellow, gap: 150 }], t);
