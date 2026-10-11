@@ -12,12 +12,13 @@
 
 `qrcode.png` 和 `qrcode-poster.png` 是指向这个网址的**静态二维码**，本身不会过期，只要这个网址一直能访问就能一直扫。
 
-### 开启 GitHub Pages（只需一次）
+### 发布方式
 
-1. 把这个分支合并到 `main`，或者直接用当前分支
-2. 打开仓库 **Settings → Pages**
-3. Source 选 **Deploy from a branch**，Branch 选 `main`（或当前分支），目录选 `/ (root)`，然后保存
-4. 等 1～2 分钟，用浏览器打开上面的网址确认能访问，再扫码测试
+GitHub Pages 已经开启，网站从 **`gh-pages` 分支**发布。修改游戏后，把改动同步到 `gh-pages` 分支，1～2 分钟后线上就会自动更新：
+
+```bash
+git push origin main:gh-pages
+```
 
 仓库根目录的 `.nojekyll` 用来让 Pages 直接发布静态文件，请不要删除。
 
