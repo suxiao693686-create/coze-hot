@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="description" content="HBN × 贵妃焕新颜 古风互动小游戏">
+<title>贵妃焕新颜 · HBN</title>
+<link rel="preload" href="assets/bg1.jpg" as="image">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<canvas id="petals"></canvas>
+
+<button id="music" class="music" aria-label="背景音乐开关">
+  <svg viewBox="0 0 24 24" width="58%" height="58%" aria-hidden="true"><path fill="#fff" d="M10 3v10.6A3.5 3.5 0 1 0 12 17V8h5V3h-7z"/></svg>
+</button>
+
+<div id="tip" class="tip">— 轻触屏幕继续 —</div>
+
+<div id="boot" class="boot"><i></i><span>加载中</span></div>
+
+<div id="wxGuide" class="wx-guide" hidden>
+  <div class="wx-arrow">↗</div>
+  <p>点击右上角 <b>···</b><br>选择「在浏览器打开」<br>即可前往选购</p>
+  <button type="button" id="wxClose">我知道了</button>
+</div>
+
+<audio id="bgm" src="assets/bgm.mp3" loop preload="auto"></audio>
+
+<script>
+// ===== 可修改的配置 =====
+window.CONFIG = {
+  // “点击种草”跳转的购买链接，换成你要的 HBN 官网 / 旗舰店 / 商品页链接即可
+  buyUrl: 'https://so.m.jd.com/ware/search.action?keyword=HBN%E5%AE%98%E6%96%B9%E6%97%97%E8%88%B0%E5%BA%97',
+  // 是否默认播放背景音乐
+  music: true
+};
+</script>
+<script src="assets/manifest.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
