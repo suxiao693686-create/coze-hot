@@ -1,0 +1,630 @@
+/* 保护创新页面特有的样式 */
+body {
+  background-image: url('../images/8.png') !important;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+.container {
+  width: 1200px;
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+/* banner样式 */
+.process-banner {
+  width: 100%;
+
+}
+
+.process-banner img {
+  margin-left: 220px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.process-banner:hover img {
+  transform: scale(1.02);
+  filter: brightness(1.05);
+}
+
+/* 非遗保护部分样式 */
+.heritage-box {
+  width: 1000px;
+  margin: 40px auto;
+  padding: 0px 100px;
+}
+
+.heritage-header {
+  position: relative;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.heritage-title {
+  background-image: url('../images/1/圆角矩形 2.png');
+  /* 红色背景图 */
+  background-size: contain;
+  background-repeat: no-repeat;
+  width: 250px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 40px;
+  /* 文字之间的间距 */
+  animation: titleFadeIn 0.8s ease-out;
+}
+
+@keyframes titleFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.heritage-title span {
+  color: #fff;
+  font-size: 20px;
+  letter-spacing: 1px;
+}
+
+.heritage-desc {
+  margin-top: 30px;
+  width: 500px;
+  margin: 0 auto;
+}
+
+.desc-title {
+  color: #8B1818;
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.desc-content {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #333;
+  text-align: justify;
+  letter-spacing: 1px;
+  animation: textFadeIn 1s ease-out;
+}
+
+@keyframes textFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 添加创新内容样式 */
+.innovation-content {
+  width: 1000px;
+  margin: 0 auto;
+  padding: 0 100px;
+}
+
+.content-item {
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  background-color: rgba(139, 24, 24, 0.1);
+  /* 浅红色背景 */
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.item-image {
+  width: 400px;
+  height: 300px;
+  overflow: hidden;
+}
+
+.item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.item-image:hover img {
+  transform: scale(1.08);
+  filter: brightness(1.1);
+}
+
+.item-text {
+  flex: 1;
+  padding: 20px;
+}
+
+.text-title {
+  color: #8B1818;
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.text-content {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #333;
+  text-align: justify;
+  letter-spacing: 1px;
+  animation: textFadeIn 1s ease-out;
+}
+
+/* 文旅创新发展列表样式 */
+.develop-list {
+  width: 600px;
+  margin: 20px auto;
+  background-color: rgba(139, 24, 24, 0.05);
+  padding: 30px 50px;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(139, 24, 24, 0.1);
+  text-align: center;
+}
+
+.develop-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline-block;
+  text-align: left;
+}
+
+.develop-list li {
+  color: #333;
+  font-size: 16px;
+  line-height: 2.5;
+  margin-bottom: 15px;
+  padding-left: 30px;
+  position: relative;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  animation: listItemFadeIn 0.5s ease-out;
+  animation-fill-mode: both;
+}
+
+.develop-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background-color: #8B1818;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.develop-list li:hover {
+  color: #8B1818;
+  transform: translateX(10px);
+  font-weight: 500;
+}
+
+.develop-list li:hover::before {
+  transform: scale(1.5);
+  box-shadow: 0 0 10px rgba(139, 24, 24, 0.3);
+}
+
+.develop-list li:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.develop-list li:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.develop-list li:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.develop-list li:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+@keyframes listItemFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 底部标题样式 */
+.bottom-title {
+  width: 1000px;
+  margin: 60px auto;
+  text-align: center;
+}
+
+.bottom-title h1 {
+  color: #8B1818;
+  /* 使用主题红色 */
+  font-size: 48px;
+  /* 大号字体 */
+  font-family: "Times New Roman", serif;
+  /* 使用衬线字体 */
+  font-weight: normal;
+  /* 字重调整为normal */
+  letter-spacing: 5px;
+  /* 增加字间距 */
+  opacity: 0.9;
+  /* 稍微调整透明度 */
+  position: relative;
+  display: inline-block;
+}
+
+.bottom-title h1::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -10px;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #8B1818, transparent);
+  transform: scaleX(0);
+  transition: transform 0.6s ease;
+}
+
+.bottom-title h1:hover::after {
+  transform: scaleX(1);
+}
+
+/* 服务创新部分样式 */
+.service-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 30px;
+  position: relative;
+  gap: 100px;
+}
+
+/* 左侧圆圈 */
+.circle-left {
+  flex-shrink: 0;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  border: 2px solid #8B1818;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 1;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(139, 24, 24, 0.1);
+}
+
+.circle-left:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(139, 24, 24, 0.15);
+  border-width: 3px;
+}
+
+.circle-left p {
+  color: #333;
+  font-size: 16px;
+  line-height: 1.8;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+}
+
+.circle-left:hover p {
+  color: #8B1818;
+}
+
+/* 右侧圆圈 */
+.umbrella-image {
+  flex-shrink: 0;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #8B1818;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(139, 24, 24, 0.1);
+}
+
+.umbrella-image:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(139, 24, 24, 0.15);
+  border-width: 3px;
+}
+
+.umbrella-image img {
+  width: 300px;
+  height: 300px;
+  object-fit: cover;
+  opacity: 0.9;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.umbrella-image:hover img {
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+
+/* 数据分析和反馈部分样式 */
+.data-section {
+  display: flex;
+  justify-content: center;
+  gap: 100px;
+  margin: 40px auto;
+  position: relative;
+}
+
+.data-box {
+  width: 300px;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(139, 24, 24, 0.1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.data-box h3 {
+  color: #8B1818;
+  font-size: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+  font-weight: normal;
+}
+
+.data-box ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.data-box li {
+  color: #333;
+  font-size: 16px;
+  line-height: 1.8;
+  margin-bottom: 15px;
+  padding-left: 20px;
+  position: relative;
+  animation: listItemFadeIn 0.5s ease-out;
+  animation-fill-mode: both;
+}
+
+.data-box li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background-color: #8B1818;
+  border-radius: 50%;
+}
+
+/* hover效果 */
+.data-box:hover {
+  transform: translateY(-8px) scale(1.02);
+}
+
+.data-box:hover h3 {
+  transform: scale(1.05);
+}
+
+.data-box:hover li {
+  color: #8B1818;
+}
+
+
+/* 营销策略部分样式 */
+.marketing-section {
+  width: 100%;
+  margin: 40px auto;
+  position: relative;
+}
+
+.marketing-list {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  position: relative;
+  z-index: 1;
+}
+
+.marketing-item {
+  width: 250px;
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(139, 24, 24, 0.1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  text-align: center;
+}
+
+.marketing-item h3 {
+  color: #8B1818;
+  font-size: 18px;
+  margin-bottom: 15px;
+  font-weight: normal;
+  position: relative;
+  display: inline-block;
+}
+
+.marketing-item h3::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2px;
+  background-color: #8B1818;
+  transition: width 0.3s ease;
+}
+
+.marketing-item p {
+  color: #333;
+  font-size: 16px;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+
+/* hover效果 */
+.marketing-item:hover {
+  transform: translateY(-8px) scale(1.03);
+}
+
+.marketing-item:hover h3::after {
+  width: 100%;
+}
+
+.marketing-item:hover p {
+  color: #8B1818;
+}
+
+
+
+/* 添加居中图片的样式 */
+.center-image {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 60px 0;
+  /* 与上下内容保持间距 */
+}
+
+.center-image img {
+  max-width: 100px;
+  /* 限制图片最大宽度 */
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* 标题hover效果 */
+.desc-title {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.desc-title:hover {
+  color: #8B1818;
+  transform: translateY(-2px);
+}
+
+/* 描述内容hover效果 */
+.desc-content {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.desc-content:hover {
+  color: #8B1818;
+  transform: translateY(-3px);
+}
+
+/* heritage-title hover效果 */
+.heritage-title {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.heritage-title:hover {
+  transform: scale(1.02);
+}
+
+.heritage-title:hover span {
+  transform: scale(1.05);
+  transition: all 0.3s ease;
+}
+
+/* center-image hover效果 */
+.center-image img {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.center-image img:hover {
+  transform: scale(1.1) rotate(5deg);
+  filter: brightness(1.1);
+}
+
+/* process-banner hover效果增强 */
+.process-banner img {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.process-banner:hover img {
+  transform: scale(1.03);
+  filter: brightness(1.1) contrast(1.05);
+}
+
+/* data-box li hover效果 */
+.data-box li {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.data-box li:hover {
+  transform: translateX(5px);
+  color: #8B1818;
+}
+
+.data-box li:hover::before {
+  transform: scale(1.5);
+  box-shadow: 0 0 5px rgba(139, 24, 24, 0.3);
+}
+
+/* marketing-item hover效果增强 */
+.marketing-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.marketing-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(139, 24, 24, 0.05) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.marketing-item:hover::before {
+  opacity: 1;
+}
