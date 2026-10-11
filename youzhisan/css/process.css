@@ -1,0 +1,338 @@
+/* 制作流程页面特有的样式 */
+body {
+  background-image: url('../images/1/背景.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+.container {
+  width: 1200px;
+  margin: 0 auto;
+  padding: 60px 0;
+  overflow: hidden;
+}
+
+/* banner样式 */
+.process-banner {
+  width: 100%;
+
+}
+
+.process-banner img {
+  margin-left: 260px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.process-banner:hover img {
+  transform: scale(1.02);
+  filter: brightness(1.05);
+}
+
+/* 流程步骤样式 */
+.process-steps {
+  width: 1000px;
+  margin: 40px auto;
+}
+
+.steps-content {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+}
+
+/* 底部线条 */
+.steps-content::after {
+  content: '';
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #8B1818 50%, transparent);
+  animation: lineFlow 3s linear infinite;
+}
+
+.step {
+  width: 33.33%;
+  position: relative;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.step-text {
+  margin-bottom: 30px;
+  transition: all 0.3s ease;
+}
+
+.step-text span {
+  color: #8B1818;
+  font-size: 18px;
+}
+
+/* 第一个步骤的特殊样式 */
+.step.active .step-text {
+  background-color: #8B1818;
+  padding: 10px 30px;
+  border-radius: 5px;
+  display: inline-block;
+  box-shadow: 0 3px 10px rgba(139, 24, 24, 0.2);
+  animation: activeStep 2s infinite;
+  cursor: pointer;
+}
+
+.step.active .step-text span {
+  color: #fff;
+}
+
+/* 圆点样式 */
+.dot {
+  width: 8px;
+  height: 8px;
+  background-color: #8B1818;
+  border-radius: 50%;
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.step.active .dot {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 5px rgba(139, 24, 24, 0.3);
+  animation: activeDot 2s infinite;
+}
+
+/* 移除不需要的样式 */
+.line-wrapper,
+.line,
+.step-text.current,
+.dot.current {
+  display: none;
+}
+
+/* 结构图样式 */
+.umbrella-structure {
+  width: 1000px;
+  margin: 60px auto;
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.umbrella-structure img {
+  width: 100%;
+  height: auto;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.umbrella-structure:hover img {
+  transform: scale(1.02);
+  filter: brightness(1.05);
+}
+
+/* 制作流程内容布局 */
+.process-content {
+  width: 1000px;
+  margin: 60px auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.process-left {
+  width: 65%;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+.process-right {
+  width: 65%;
+  position: relative;
+  margin-left: -120px;
+  padding-left: 40px;
+  cursor: pointer;
+}
+
+.process-left img,
+.process-right img {
+  max-width: 100%;
+  object-fit: contain;
+  width: auto;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.process-left:hover img,
+.process-right:hover img {
+  transform: scale(1.03);
+  filter: brightness(1.05);
+}
+
+/* 步骤hover效果 */
+.step:hover .step-text {
+  transform: translateY(-3px);
+}
+
+.step:hover .dot {
+  transform: translateX(-50%) scale(1.2);
+  box-shadow: 0 0 8px rgba(139, 24, 24, 0.5);
+}
+
+/* 定义动画 */
+@keyframes activeStep {
+
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 3px 10px rgba(139, 24, 24, 0.2);
+  }
+
+  50% {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(139, 24, 24, 0.3);
+  }
+}
+
+@keyframes activeDot {
+
+  0%,
+  100% {
+    transform: translateX(-50%) scale(1);
+    box-shadow: 0 0 5px rgba(139, 24, 24, 0.3);
+  }
+
+  50% {
+    transform: translateX(-50%) scale(1.2);
+    box-shadow: 0 0 10px rgba(139, 24, 24, 0.5);
+  }
+}
+
+@keyframes lineFlow {
+  0% {
+    background-position: -1000px 0;
+  }
+
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* 轮播图样式 */
+.carousel-container {
+  width: 1200px;
+  margin: 60px auto;
+  position: relative;
+  padding: 0 20px;
+  overflow: hidden;
+}
+
+.carousel-wrapper {
+  margin: 0 -150px;
+  position: relative;
+}
+
+.carousel {
+  display: flex;
+  transition: transform 0.5s ease;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.carousel-item {
+  min-width: 400px;
+  padding: 0 20px;
+  transition: all 0.5s ease;
+  opacity: 0.5;
+  transform: scale(0.8);
+}
+
+.carousel-item.active {
+  opacity: 1;
+  transform: scale(1.1);
+  z-index: 1;
+}
+
+.carousel-item img {
+  width: 100%;
+  height: 400px;
+  object-fit: cover;
+  border-radius: 10px;
+  transition: all 0.5s ease;
+}
+
+/* 轮播按钮样式 */
+.carousel-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: none;
+  background-color: rgba(139, 24, 24, 0.8);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.carousel-button:hover {
+  background-color: #8B1818;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-button.prev {
+  left: 50px;
+  z-index: 2;
+}
+
+.carousel-button.next {
+  right: 50px;
+  z-index: 2;
+}
+
+/* 箭头样式 */
+.arrow-left,
+.arrow-right {
+  border: solid #fff;
+  border-width: 0 3px 3px 0;
+  display: inline-block;
+  padding: 6px;
+}
+
+.arrow-left {
+  transform: rotate(135deg);
+}
+
+.arrow-right {
+  transform: rotate(-45deg);
+}
+
+/* 添加居中图片的样式 */
+.center-image {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 60px 0;
+  /* 与上下内容保持间距 */
+}
+
+.center-image img {
+  max-width: 100px;
+  /* 限制图片最大宽度 */
+  width: 100%;
+  height: auto;
+  display: block;
+}

@@ -1,0 +1,259 @@
+/* 清理重复的样式，只保留必要的样式 */
+body {
+  background-image: url('../images/1/背景.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  /* min-height: 100vh; */
+}
+
+.container {
+  width: 1200px;
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+.timeline {
+  position: relative;
+  padding: 0 100px;
+}
+
+/* 时间轴竖线 */
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #8B1818;
+  transform: translateX(-50%);
+}
+
+.timeline-item {
+  margin-bottom: 80px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
+
+.timeline-item .left-content,
+.timeline-item .right-content {
+  width: calc(50% - 30px);
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 标题部分独立样式 */
+.title-section {
+  margin-bottom: 50px;
+  /* 与下方内容的间距 */
+}
+
+.title-section .title-bg {
+  background-image: url('../images/1/圆角矩形 2.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  width: 200px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  padding-left: 50px;
+}
+
+.title-section span {
+  color: #fff;
+  font-size: 24px;
+  width: 100px;
+  /* 给文字一个固定宽度，与背景图中的红色区域对应 */
+  text-align: center;
+  /* 文字在固定宽度内居中 */
+}
+
+.timeline-item h2 {
+  color: #8B1818;
+  font-size: 20px;
+  margin-bottom: 20px;
+  /* 增加标题下方间距 */
+  text-align: center;
+  position: relative;
+  /* 为下划线效果做准备 */
+  display: inline-block;
+  /* 让下划线宽度适应文字 */
+  padding: 0 10px;
+  /* 为下划线留出空间 */
+  cursor: pointer;
+  /* 添加手型指针 */
+}
+
+.timeline-item h2::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 0;
+  height: 2px;
+  background-color: #8B1818;
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+}
+
+.timeline-item h2:hover::after {
+  width: 100%;
+  /* 悬停时显示下划线 */
+}
+
+.text {
+  margin-top: 10px;
+  width: 100%;
+}
+
+.text p {
+  font-size: 16px;
+  line-height: 2;
+  /* 增加行高 */
+  color: #333;
+  text-align: justify;
+  /* 文字两端对齐 */
+  letter-spacing: 1px;
+  /* 增加字间距 */
+  transition: all 0.3s ease;
+  /* 添加过渡效果 */
+  padding: 10px;
+  /* 添加内边距为悬停效果留空间 */
+  cursor: pointer;
+  /* 添加手型指针 */
+}
+
+.text p:hover {
+  background-color: rgba(139, 24, 24, 0.05);
+  /* 悬停时添加淡红色背景 */
+  transform: translateY(-2px);
+  /* 轻微上浮 */
+}
+
+.image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  /* 确保图片容器占满宽度 */
+  overflow: hidden;
+  /* 确保缩放效果不溢出 */
+}
+
+.image img {
+  width: 400px;
+  height: 240px;
+  object-fit: cover;
+  transition: all 0.3s ease;
+  /* 添加过渡效果 */
+  cursor: pointer;
+  /* 添加手型指针 */
+}
+
+.image img:hover {
+  transform: scale(1.05);
+  /* 悬停时轻微放大 */
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  /* 添加阴影 */
+}
+
+/* 时间轴节点 */
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: #8B1818;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* 知寓意部分样式 */
+.meaning {
+  margin-top: 80px;
+  /* 与上一部分保持距离 */
+  padding: 0 100px;
+  /* 与上面的timeline部分保持一致的padding */
+}
+
+.meaning-content {
+  margin-top: 40px;
+}
+
+.meaning-items {
+  display: flex;
+  justify-content: space-between;
+  /* 改为space-between让图标均匀分布 */
+  align-items: center;
+  width: 100%;
+  /* 确保占满容器宽度 */
+}
+
+.meaning-items .item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 25px;
+  /* 增加图片和文字之间的间距 */
+}
+
+.meaning-items .item img {
+  width: 100px;
+  height: 160px;
+  /* 增加图片高度 */
+  object-fit: contain;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.meaning-items .item img:hover {
+  transform: translateY(-5px);
+}
+
+.meaning-items .item span {
+  color: #333;
+  font-size: 16px;
+  margin-top: 15px;
+  /* 额外增加一点上边距 */
+  margin-left: -10px;
+}
+
+/* title-section样式可以复用之前的 */
+
+/* 添加intro-banner样式 */
+.intro-banner {
+  width: 100%;
+  margin-bottom: 60px;
+  /* 与下方内容保持间距 */
+}
+
+.intro-banner img {
+  width: 100%;
+  height: auto;
+  /* 让高度自适应，保持图片比例 */
+  display: block;
+}
+
+/* 添加居中图片的样式 */
+.center-image {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 60px 0;
+  /* 与上下内容保持间距 */
+}
+
+.center-image img {
+  max-width: 100px;
+  /* 限制图片最大宽度 */
+  width: 100%;
+  height: auto;
+  display: block;
+}

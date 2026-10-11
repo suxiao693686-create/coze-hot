@@ -1,0 +1,427 @@
+/* IP形象页面特有的样式 */
+body {
+  background-image: url('../images/1/背景.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+.container {
+  width: 1200px;
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+/* banner样式 */
+.process-banner {
+  width: 100%;
+
+}
+
+.process-banner img {
+  margin-top: -3px;
+  width: 100%;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.process-banner:hover img {
+  transform: scale(1.02);
+  filter: brightness(1.05);
+}
+
+/* IP形象介绍部分样式 */
+.ip-character {
+  width: 1000px;
+  margin: 40px auto;
+  padding: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  position: relative;
+  min-height: 400px;
+}
+
+/* 左侧信息部分 */
+.character-info {
+  width: 300px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.character-info:hover {
+  transform: translateY(-5px);
+}
+
+.character-info h2 {
+  color: #8B1818;
+  font-size: 28px;
+  margin-bottom: 30px;
+  font-weight: normal;
+  position: relative;
+  display: inline-block;
+}
+
+.character-info h2::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background-color: #8B1818;
+  transition: width 0.3s ease;
+}
+
+.character-info:hover h2::after {
+  width: 100%;
+}
+
+.info-list {
+  margin-top: 20px;
+}
+
+.info-item {
+  margin-bottom: 15px;
+  font-size: 16px;
+  line-height: 1.8;
+  display: flex;
+  align-items: flex-start;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.info-item:hover {
+  transform: translateX(10px);
+  color: #8B1818;
+}
+
+.info-item .label {
+  color: #8B1818;
+  font-weight: 500;
+  margin-right: 10px;
+  min-width: 60px;
+}
+
+/* 中间主题色部分 */
+.theme-colors {
+  width: 100px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.theme-colors h3 {
+  color: #8B1818;
+  font-size: 20px;
+  margin-bottom: 40px;
+  font-weight: normal;
+}
+
+.color-list {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  align-items: center;
+  flex-grow: 1;
+  justify-content: center;
+}
+
+.color-item {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.color-item:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+.color-item.black {
+  background-color: #000;
+}
+
+.color-item.yellow {
+  background-color: #F3E5AB;
+}
+
+.color-item.pink {
+  background-color: #FFE4E1;
+}
+
+/* 右侧视图部分 */
+.character-views {
+  width: 400px;
+  padding: 20px;
+}
+
+.view-list {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  height: 100%;
+  align-items: center;
+}
+
+.view-item {
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.view-item:hover {
+  transform: translateY(-10px);
+}
+
+.view-item img {
+  width: 120px;
+  height: 300px;
+  object-fit: contain;
+  margin-bottom: 10px;
+  transition: all 0.3s ease;
+}
+
+.view-item:hover img {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.view-item span {
+  color: #8B1818;
+  font-size: 14px;
+}
+
+/* 分隔线样式 */
+.ip-character::before,
+.ip-character::after {
+  content: '';
+  position: absolute;
+  top: 10%;
+  height: 80%;
+  width: 1px;
+  background-color: rgba(139, 24, 24, 0.1);
+}
+
+.ip-character::before {
+  left: 32%;
+}
+
+.ip-character::after {
+  right: 35%;
+}
+
+/* 细节展示部分样式 */
+.detail-section {
+  width: 1000px;
+  margin: 60px auto;
+  padding: 40px;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.section-header h2 {
+  color: #8B1818;
+  font-size: 28px;
+  font-weight: normal;
+}
+
+.section-header span {
+  font-size: 18px;
+  color: #666;
+  margin-left: 10px;
+}
+
+.detail-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 40px;
+  position: relative;
+}
+
+/* 左侧部分 */
+.detail-left {
+  width: 300px;
+
+}
+
+.detail-left .detail-item {
+  padding: 20px;
+}
+
+.detail-left img {
+  width: 200px;
+  height: 200px;
+  object-fit: cover;
+  margin-bottom: 50px;
+  transition: all 0.3s ease;
+}
+
+.detail-left:hover img {
+  transform: scale(1.05);
+}
+
+/* 中间部分 */
+.detail-center {
+  width: 300px;
+  text-align: center;
+}
+
+.center-figure {
+  width: 100%;
+  height: auto;
+  transition: all 0.3s ease;
+}
+
+.center-figure:hover {
+  transform: scale(1.05);
+}
+
+/* 右侧部分 */
+.detail-right {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.detail-right .detail-item {
+  padding: 20px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.detail-right .detail-item::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #8B1818;
+  transform: translateY(-50%);
+}
+
+/* 公共样式 */
+.item-desc h3 {
+  color: #8B1818;
+  font-size: 18px;
+  margin-bottom: 10px;
+  font-weight: normal;
+}
+
+.item-desc h3 span {
+  font-size: 14px;
+  color: #666;
+  margin-left: 10px;
+}
+
+.item-desc p {
+  color: #333;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+/* hover效果 */
+.detail-item {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.detail-item:hover {
+  transform: translateY(-5px);
+}
+
+/* 连接线效果 */
+.detail-right .detail-item::after {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 40px;
+  height: 1px;
+  background-color: #8B1818;
+  opacity: 0.2;
+  transform: translateY(-50%);
+}
+
+.detail-right .detail-item:hover::after {
+  opacity: 0.5;
+  width: 60px;
+}
+
+/* Q版表情包设计部分样式 */
+.emoji-section {
+  width: 1000px;
+  margin: 60px auto;
+  padding: 40px;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.section-header h2 {
+  color: #8B1818;
+  font-size: 28px;
+  font-weight: normal;
+}
+
+.section-header span {
+  font-size: 18px;
+  color: #666;
+  margin-left: 10px;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.emoji-item {
+  width: 100%;
+  padding: 10px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+}
+
+.emoji-item img {
+  width: 150px;
+  height: auto;
+  border-radius: 15px;
+  transition: all 0.3s ease;
+}
+
+.emoji-item:hover img {
+  transform: scale(1.05);
+}
+
+/* 添加居中图片的样式 */
+.center-image {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 60px 0;
+  /* 与上下内容保持间距 */
+}
+
+.center-image img {
+  max-width: 100px;
+  /* 限制图片最大宽度 */
+  width: 100%;
+  height: auto;
+  display: block;
+}
