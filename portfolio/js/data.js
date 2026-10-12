@@ -103,19 +103,27 @@ window.PROFILE = {
 };
 
 /* -------------------------------------------------------------
+ * 作品模块
+ * 作品房间按模块分区展示，顺序就是展示顺序。以后加新模块就在这里加一行，
+ * 再给作品写上对应的 module。
+ * ------------------------------------------------------------- */
+window.MODULES = [
+  { id: 'ppt', name: 'PPT 设计', en: 'presentation', desc: '用一份 PPT 讲清一个品牌、一个项目、一个想法。点开可以全屏逐页翻阅。' }
+];
+
+/* -------------------------------------------------------------
  * 作品列表
- * 现在全部是「待落笔」的空画框，作品做好后把对应的空框换成真实内容。
- * 一件作品的写法（复制下面注释里的模板，去掉 // 即可）：
+ * 还没放内容的作品写 placeholder: true，会显示成「待落笔」的空画框。
+ * 一件作品的写法（复制下面注释里的模板，去掉 * 即可）：
  *
  * {
  *   id: 'my-work',                 // 英文 id，用在链接里：#work/my-work
- *   no: '01',
+ *   module: 'ppt',                 // 属于哪个模块（见上面 MODULES）
  *   title: '作品名',
  *   subtitle: '一句话说明',
- *   category: '品牌策划',          // 会自动生成顶部筛选按钮
  *   year: '2026',
- *   role: '策划 · 文案',
- *   cover: 'covers/my-work.jpg',   // 封面，建议竖版 4:5，放在 portfolio/covers/
+ *   role: '策划 · 文案 · 设计',
+ *   cover: 'works/my-work/slide-01.webp',   // 封面，不写就用 PPT 第一页
  *   tags: ['关键词', '关键词'],
  *   summary: '作品简介',
  *   case: [                         // 案例拆解，不需要的项可以删
@@ -125,16 +133,14 @@ window.PROFILE = {
  *     { k: '执行', v: '...' },
  *     { k: '成果', v: '...' }
  *   ],
- *   images: ['covers/my-work-1.jpg', 'covers/my-work-2.jpg'],
+ *   // PPT 作品：用 tools/ppt2web.py 把 PPT / PDF 转成网页图片，脚本会打印出这一段
+ *   deck: { dir: 'works/my-work/', count: 24 },
+ *   images: [],                     // 其他作品图（可选）
  *   link: '',                       // 在线地址，没有就留空
  *   qr: ''                          // 二维码图片，没有就留空
  * },
  * ------------------------------------------------------------- */
 window.WORKS = [
-  { id: 'p1', no: '01', placeholder: true, title: '作品待落笔' },
-  { id: 'p2', no: '02', placeholder: true, title: '作品待落笔' },
-  { id: 'p3', no: '03', placeholder: true, title: '作品待落笔' },
-  { id: 'p4', no: '04', placeholder: true, title: '作品待落笔' },
-  { id: 'p5', no: '05', placeholder: true, title: '作品待落笔' },
-  { id: 'p6', no: '06', placeholder: true, title: '作品待落笔' }
+  { id: 'tashan', module: 'ppt', placeholder: true, title: '塔山石榴', note: 'PPT 整理中，即将上线' },
+  { id: 'ppt-next', module: 'ppt', placeholder: true, title: '作品待落笔', note: '持续更新中' }
 ];

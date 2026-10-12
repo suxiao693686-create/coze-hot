@@ -246,10 +246,10 @@
     });
 
     // 挂画：有作品就挂作品的黑白线稿（悬停上色），还没有就挂一个"待落笔"的空画框
-    var real = WORKS.filter(function (w) { return !w.placeholder; });
+    var real = realWorks();
     LAYOUT.frames.forEach(function (o, k) {
-      var w = real[k];
-      var fw = Math.round(D.doorW * 1.15), fh = Math.round(fw * 1.2);
+      var w = real[k], wide = w && w.deck;
+      var fw = Math.round(D.doorW * (wide ? 1.7 : 1.15)), fh = Math.round(wide ? fw * .62 : fw * 1.2);
       var el = document.createElement('figure');
       el.className = 'wallframe' + (w ? '' : ' wallframe--empty');
       el.setAttribute('role', 'button'); el.tabIndex = 0;
@@ -261,9 +261,9 @@
         el.dataset.go = 'works';
         el.setAttribute('aria-label', '去作品房间');
       }
-      el.innerHTML = (w ? '<img src="' + esc(w.cover) + '" alt="" loading="lazy">' : '<div class="wallframe__blank">' + icon('pencil') + '<span>待落笔</span></div>') +
+      el.innerHTML = (w ? '<img src="' + esc(coverOf(w)) + '" alt="" loading="lazy">' : '<div class="wallframe__blank">' + icon('pencil') + '<span>待落笔</span></div>') +
         svg(fw + 20, fh + 20, '<path class="ln ln--bold" d="' + rectPath(3, 3, fw + 14, fh + 14, rng(70 + k), 2) + '"/>', 'wallframe__line') +
-        '<figcaption>' + (w ? 'No.' + esc(w.no) + ' ' + esc(w.title) : 'No.0' + (k + 1) + ' 作品待落笔') + '</figcaption>';
+        '<figcaption>' + (w ? esc(w.title) + (w.deck ? ' · PPT' : '') : 'No.0' + (k + 1) + ' 作品待落笔') + '</figcaption>';
       place(el, o.side, o.d, fw, H * .12);
     });
 
@@ -443,38 +443,68 @@
     });
   }
 
-  /* ---------- 作品 ---------- */
+  /* ---------- 作品：按模块分区 ---------- */
+  var MODULES = window.MODULES || [];
+  function pad(n, len) { n = String(n); while (n.length < len) n = '0' + n; return n; }
+  // PPT 每一页的图片地址：works/xxx/slide-01.webp、缩略图 thumb-01.webp
+  function deckSrc(w, n, thumb) {
+    var d = w.deck;
+    return d.dir + (thumb ? 'thumb-' : 'slide-') + pad(n, Math.max(2, String(d.count).length)) + '.' + (d.ext || 'webp');
+  }
+  function coverOf(w) { return w.cover || (w.deck ? deckSrc(w, 1) : ''); }
+  function realWorks() {
+    // 按模块顺序排，详情页的「上一件 / 下一件」也按这个顺序
+    var order = MODULES.map(function (m) { return m.id; });
+    return WORKS.filter(function (w) { return !w.placeholder; }).sort(function (a, b) {
+      return order.indexOf(a.module) - order.indexOf(b.module);
+    });
+  }
+  function moduleOf(w) { return MODULES.filter(function (m) { return m.id === w.module; })[0] || { name: '' }; }
+
+  function cardHtml(w, i, k) {
+    var tilt = ((i * 37) % 5 - 2) * .55, mod = moduleOf(w), no = pad(k + 1, 2);
+    if (w.placeholder) {
+      return '<article class="card card--empty rv" style="--tilt:' + tilt + 'deg">' +
+        '<div class="card__frame"><div class="card__blank">' + icon('pencil') + '<p>待落笔</p><small>new work coming soon</small></div></div>' +
+        '<div class="card__meta"><span class="card__no">No.' + no + (mod.name ? ' · ' + esc(mod.name) : '') + '</span><h3>' + esc(w.title) + '</h3><p>' + esc(w.note || '敬请期待') + '</p></div></article>';
+    }
+    var cover = coverOf(w);
+    var info = ['No.' + no, mod.name, w.year, w.deck ? w.deck.count + ' 页' : ''].filter(Boolean).map(esc).join(' · ');
+    return '<article class="card rv" data-work="' + esc(w.id) + '" tabindex="0" role="button" aria-label="查看作品：' + esc(w.title) + '" style="--tilt:' + tilt + 'deg">' +
+      '<div class="card__frame"><span class="tape tape--a"></span><span class="tape tape--b"></span>' +
+      '<img class="card__img card__img--sketch" src="' + esc(cover) + '" alt="" loading="lazy">' +
+      '<img class="card__img card__img--color" src="' + esc(cover) + '" alt="' + esc(w.title) + '" loading="lazy">' +
+      '<span class="card__cta">' + (w.deck ? '翻阅 PPT →' : '打开看看 →') + '</span></div>' +
+      '<div class="card__meta"><span class="card__no">' + info + '</span>' +
+      '<h3>' + esc(w.title) + '</h3><p>' + esc(w.subtitle || '') + '</p>' +
+      '<ul class="tags">' + (w.tags || []).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul></div></article>';
+  }
+
   function buildGallery() {
-    var cats = ['全部'];
-    WORKS.forEach(function (w) { if (!w.placeholder && w.category && cats.indexOf(w.category) < 0) cats.push(w.category); });
-    $('#filters').hidden = cats.length < 3; // 只有一类作品时不需要筛选
-    $('#filters').innerHTML = cats.map(function (c, i) {
-      return '<button role="tab" aria-selected="' + (i === 0) + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>';
-    }).join('');
+    var i = 0;
+    $('#gallery').innerHTML = MODULES.map(function (m, mi) {
+      var list = WORKS.filter(function (w) { return w.module === m.id; });
+      var done = list.filter(function (w) { return !w.placeholder; }).length;
+      return '<section class="module module--' + esc(m.id) + '" id="mod-' + esc(m.id) + '">' +
+        '<header class="module__head rv"><span class="module__no">Part ' + pad(mi + 1, 2) + '</span>' +
+        '<h3>' + esc(m.name) + '<em>' + esc(m.en || '') + '</em></h3>' +
+        (m.desc ? '<p>' + esc(m.desc) + '</p>' : '') +
+        '<span class="module__count">' + (done ? done + ' 件作品' : '整理中') + '</span></header>' +
+        '<div class="gallery' + (m.id === 'ppt' ? ' gallery--wide' : '') + '">' +
+        list.map(function (w, k) { return cardHtml(w, i++, k); }).join('') + '</div></section>';
+    }).join('') + '<p class="modules__more rv">' + icon('dots') + '更多作品模块，正在路上</p>';
 
-    $('#gallery').innerHTML = WORKS.map(function (w, i) {
-      var tilt = ((i * 37) % 5 - 2) * .55;
-      if (w.placeholder) {
-        return '<article class="card card--empty rv" data-cat="' + esc(w.category) + '" style="--tilt:' + tilt + 'deg">' +
-          '<div class="card__frame"><div class="card__blank">' + icon('pencil') + '<p>待落笔</p><small>new work coming soon</small></div></div>' +
-          '<div class="card__meta"><span class="card__no">No.' + esc(w.no) + '</span><h3>' + esc(w.title) + '</h3><p>' + (w.category ? esc(w.category) + ' · ' : '') + '敬请期待</p></div></article>';
-      }
-      return '<article class="card rv" data-cat="' + esc(w.category) + '" data-work="' + esc(w.id) + '" tabindex="0" role="button" aria-label="查看作品：' + esc(w.title) + '" style="--tilt:' + tilt + 'deg">' +
-        '<div class="card__frame"><span class="tape tape--a"></span><span class="tape tape--b"></span>' +
-        '<img class="card__img card__img--sketch" src="' + esc(w.cover) + '" alt="" loading="lazy">' +
-        '<img class="card__img card__img--color" src="' + esc(w.cover) + '" alt="' + esc(w.title) + '" loading="lazy">' +
-        '<span class="card__cta">打开看看 →</span></div>' +
-        '<div class="card__meta"><span class="card__no">No.' + esc(w.no) + ' · ' + esc(w.category) + ' · ' + esc(w.year) + '</span>' +
-        '<h3>' + esc(w.title) + '</h3><p>' + esc(w.subtitle) + '</p>' +
-        '<ul class="tags">' + (w.tags || []).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul></div></article>';
+    // 只有一个模块时不需要模块导航
+    var nav = $('#modnav');
+    nav.hidden = MODULES.length < 2;
+    nav.innerHTML = MODULES.map(function (m, mi) {
+      return '<a href="#mod-' + esc(m.id) + '" data-mod="' + esc(m.id) + '"><i>' + pad(mi + 1, 2) + '</i>' + esc(m.name) + '</a>';
     }).join('');
-
-    $('#filters').addEventListener('click', function (e) {
-      var b = e.target.closest('button'); if (!b) return;
-      $$('#filters button').forEach(function (x) { x.setAttribute('aria-selected', x === b); });
-      $$('#gallery .card').forEach(function (c) {
-        c.classList.toggle('is-hidden', b.dataset.cat !== '全部' && c.dataset.cat !== b.dataset.cat);
-      });
+    nav.addEventListener('click', function (e) {
+      var a = e.target.closest('a[data-mod]'); if (!a) return;
+      e.preventDefault();
+      var el = $('#mod-' + a.dataset.mod), room = $('#room-works');
+      room.scrollTo({ top: el.offsetTop - 90, behavior: reduce ? 'auto' : 'smooth' });
     });
 
     // 鼠标进入的位置作为"上色"的圆心
@@ -498,31 +528,52 @@
   /* ---------- 作品详情 ---------- */
   var sheet = $('#sheet'), sheetPaper = $('#sheetPaper'), lastFocus;
   function openWork(id, fromHash) {
-    var real = WORKS.filter(function (w) { return !w.placeholder; });
+    var real = realWorks();
     var idx = -1;
     real.forEach(function (w, i) { if (w.id === id) idx = i; });
     if (idx < 0) return;
     var w = real[idx], prev = real[(idx - 1 + real.length) % real.length], next = real[(idx + 1) % real.length];
-    lastFocus = document.activeElement;
+    var mod = moduleOf(w);
+    if (!sheet.classList.contains('is-open')) lastFocus = document.activeElement;
+
+    var deck = '';
+    if (w.deck) {
+      var thumbs = '';
+      for (var n = 1; n <= w.deck.count; n++) {
+        thumbs += '<button data-deck="' + esc(w.id) + '" data-page="' + n + '" aria-label="从第 ' + n + ' 页开始看">' +
+          '<img src="' + esc(deckSrc(w, n, true)) + '" alt="" loading="lazy"><i>' + n + '</i></button>';
+      }
+      deck = '<div class="deckbox">' +
+        '<button class="deckbox__play" data-deck="' + esc(w.id) + '" data-page="1">' +
+        '<img src="' + esc(deckSrc(w, 1)) + '" alt="' + esc(w.title) + ' 第 1 页">' +
+        '<span><b>▶</b>全屏翻阅 · 共 ' + w.deck.count + ' 页</span></button>' +
+        '<p class="deckbox__tip">点任意一页从那里开始看 · 键盘 ← → 翻页</p>' +
+        '<div class="deckbox__grid">' + thumbs + '</div></div>';
+    }
 
     sheetPaper.innerHTML =
       '<button class="sheet__x" data-sheet-close aria-label="关闭">×</button>' +
       '<header class="sheet__head">' +
-      '<span class="card__no">No.' + esc(w.no) + ' · ' + esc(w.category) + '</span>' +
-      '<h2>' + esc(w.title) + '</h2><p class="sheet__sub">' + esc(w.subtitle) + '</p>' +
-      '<dl class="sheet__meta"><div><dt>年份</dt><dd>' + esc(w.year) + '</dd></div><div><dt>我的角色</dt><dd>' + esc(w.role) + '</dd></div>' +
-      '<div><dt>关键词</dt><dd>' + esc((w.tags || []).join(' / ')) + '</dd></div></dl></header>' +
-      '<p class="sheet__summary">' + esc(w.summary) + '</p>' +
+      '<span class="card__no">' + esc(mod.name || '') + '</span>' +
+      '<h2>' + esc(w.title) + '</h2>' + (w.subtitle ? '<p class="sheet__sub">' + esc(w.subtitle) + '</p>' : '') +
+      '<dl class="sheet__meta">' +
+      (w.year ? '<div><dt>年份</dt><dd>' + esc(w.year) + '</dd></div>' : '') +
+      (w.role ? '<div><dt>我的角色</dt><dd>' + esc(w.role) + '</dd></div>' : '') +
+      (w.deck ? '<div><dt>页数</dt><dd>' + w.deck.count + ' 页</dd></div>' : '') +
+      (w.tags && w.tags.length ? '<div><dt>关键词</dt><dd>' + esc(w.tags.join(' / ')) + '</dd></div>' : '') +
+      '</dl></header>' +
+      (w.summary ? '<p class="sheet__summary">' + esc(w.summary) + '</p>' : '') +
+      deck +
       (w.images && w.images.length ? '<div class="sheet__imgs">' + w.images.map(function (src) {
         return '<figure><img src="' + esc(src) + '" alt="' + esc(w.title) + ' 作品图" loading="lazy"></figure>';
       }).join('') + '</div>' : '') +
       (w.case ? '<ol class="case">' + w.case.map(function (c, i) {
         return '<li><span class="case__k"><i>0' + (i + 1) + '</i>' + esc(c.k) + '</span><p>' + esc(c.v) + '</p></li>';
       }).join('') + '</ol>' : '') +
-      '<footer class="sheet__foot">' +
-      (w.link ? '<a class="btn" href="' + esc(w.link) + '" target="_blank" rel="noopener">在线体验 →</a>' : '') +
-      (w.qr ? '<figure class="sheet__qr"><img src="' + esc(w.qr) + '" alt="' + esc(w.title) + ' 二维码"><figcaption>手机扫码体验</figcaption></figure>' : '') +
-      '</footer>' +
+      (w.link || w.qr ? '<footer class="sheet__foot">' +
+        (w.link ? '<a class="btn" href="' + esc(w.link) + '" target="_blank" rel="noopener">在线体验 →</a>' : '') +
+        (w.qr ? '<figure class="sheet__qr"><img src="' + esc(w.qr) + '" alt="' + esc(w.title) + ' 二维码"><figcaption>手机扫码体验</figcaption></figure>' : '') +
+        '</footer>' : '') +
       (real.length > 1 ? '<nav class="sheet__nav"><button data-work="' + esc(prev.id) + '">← ' + esc(prev.title) + '</button><button data-work="' + esc(next.id) + '">' + esc(next.title) + ' →</button></nav>' : '');
 
     sheet.setAttribute('aria-hidden', 'false');
@@ -539,6 +590,128 @@
     document.body.classList.remove('in-sheet');
     hist('replaceState', current ? '#' + current : location.pathname + location.search);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+  }
+
+  /* ---------- PPT 翻阅器 ---------- */
+  var deckEl, deckW = null, deckN = 1, deckImg, deckFocus;
+  function buildDeck() {
+    deckEl = document.createElement('div');
+    deckEl.className = 'deck';
+    deckEl.setAttribute('role', 'dialog');
+    deckEl.setAttribute('aria-modal', 'true');
+    deckEl.setAttribute('aria-label', 'PPT 翻阅');
+    deckEl.innerHTML =
+      '<header class="deck__bar"><b class="deck__title"></b>' +
+      '<span class="deck__count mono"><i></i> / <span></span></span>' +
+      '<div class="deck__tools"><button class="deck__fs" data-deck-fs>全屏</button>' +
+      '<button class="deck__x" data-deck-close aria-label="关闭">×</button></div></header>' +
+      '<div class="deck__stage">' +
+      '<button class="deck__nav deck__nav--prev" data-deck-step="-1" aria-label="上一页">‹</button>' +
+      '<figure class="deck__slide"><img alt=""><span class="deck__spin" aria-hidden="true"></span><figcaption class="deck__tip">左右滑动翻页 · 横过来看更清楚</figcaption></figure>' +
+      '<button class="deck__nav deck__nav--next" data-deck-step="1" aria-label="下一页">›</button></div>' +
+      '<div class="deck__progress"><i></i></div>' +
+      '<nav class="deck__rail" aria-label="页面缩略图"></nav>';
+    document.body.appendChild(deckEl);
+    deckImg = $('.deck__slide img', deckEl);
+    if (!document.fullscreenEnabled) $('.deck__fs', deckEl).hidden = true;
+
+    deckEl.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.closest('[data-deck-close]')) return closeDeck();
+      if (t.closest('[data-deck-fs]')) {
+        if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+        else if (deckEl.requestFullscreen) deckEl.requestFullscreen().catch(function () {});
+        return;
+      }
+      var st = t.closest('[data-deck-step]');
+      if (st) return deckGo(deckN + +st.dataset.deckStep);
+      var th = t.closest('[data-page]');
+      if (th) return deckGo(+th.dataset.page);
+    });
+    // 点幻灯片左边三分之一往回翻，其余往后翻；手机上左右滑动翻页
+    var sx = null, sy = 0;
+    var slide = $('.deck__slide', deckEl);
+    slide.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; });
+    slide.addEventListener('pointerup', function (e) {
+      if (sx === null) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return deckGo(deckN + (dx < 0 ? 1 : -1));
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+        var b = slide.getBoundingClientRect();
+        deckGo(deckN + (e.clientX - b.left < b.width / 3 ? -1 : 1));
+      }
+    });
+  }
+  function openDeck(id, page) {
+    var w = WORKS.filter(function (x) { return x.id === id && x.deck; })[0];
+    if (!w) return;
+    if (!deckEl) buildDeck();
+    deckW = w;
+    deckFocus = document.activeElement;
+    $('.deck__title', deckEl).textContent = w.title;
+    $('.deck__count span', deckEl).textContent = w.deck.count;
+    var rail = '';
+    for (var n = 1; n <= w.deck.count; n++) {
+      rail += '<button data-page="' + n + '" aria-label="第 ' + n + ' 页"><img src="' + esc(deckSrc(w, n, true)) + '" alt="" loading="lazy"><i>' + n + '</i></button>';
+    }
+    $('.deck__rail', deckEl).innerHTML = rail;
+    deckN = 0;
+    deckEl.classList.add('is-open');
+    document.body.classList.add('in-deck');
+    deckGo(page || 1);
+    setTimeout(function () { $('.deck__x', deckEl).focus({ preventScroll: true }); }, 50);
+  }
+  function closeDeck() {
+    if (!deckEl || !deckEl.classList.contains('is-open')) return;
+    if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+    deckEl.classList.remove('is-open');
+    document.body.classList.remove('in-deck');
+    deckW = null;
+    if (deckFocus && deckFocus.focus) deckFocus.focus({ preventScroll: true });
+  }
+  function deckGo(n) {
+    if (!deckW) return;
+    var total = deckW.deck.count;
+    n = clamp(n, 1, total);
+    if (n === deckN) return;
+    var back = n < deckN;
+    deckN = n;
+    var src = deckSrc(deckW, n), w = deckW;
+    $('.deck__count i', deckEl).textContent = n;
+    $('.deck__progress i', deckEl).style.width = (n / total * 100) + '%';
+    $('.deck__nav--prev', deckEl).disabled = n === 1;
+    $('.deck__nav--next', deckEl).disabled = n === total;
+    $$('.deck__rail button', deckEl).forEach(function (b) {
+      var on = +b.dataset.page === n;
+      b.classList.toggle('is-on', on);
+      if (on) b.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    });
+    deckEl.classList.add('is-loading');
+    var img = new Image();
+    img.src = src;
+    var show = function () {
+      if (deckW !== w || deckN !== n) return; // 已经翻到别的页了
+      deckImg.src = src;
+      deckImg.alt = w.title + ' 第 ' + n + ' 页';
+      deckEl.classList.remove('is-loading');
+      deckImg.classList.remove('is-in', 'is-back');
+      void deckImg.offsetWidth;
+      deckImg.classList.add('is-in');
+      if (back) deckImg.classList.add('is-back');
+    };
+    (img.decode ? img.decode() : Promise.resolve()).then(show, show);
+    // 提前加载前后几页，翻页时不用等
+    [n + 1, n + 2, n - 1].forEach(function (k) { if (k >= 1 && k <= total) (new Image()).src = deckSrc(w, k); });
+  }
+  function deckKey(e) {
+    var k = e.key;
+    if (k === 'Escape') closeDeck();
+    else if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' ') deckGo(deckN + 1);
+    else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp') deckGo(deckN - 1);
+    else if (k === 'Home') deckGo(1);
+    else if (k === 'End') deckGo(deckW.deck.count);
+    else return;
+    e.preventDefault();
   }
 
   /* ---------- 关于 ---------- */
@@ -647,6 +820,8 @@
       else if (current) openRoom(g); else enterDoor(g);
       return;
     }
+    var dk = t.closest('[data-deck]');
+    if (dk) { openDeck(dk.dataset.deck, +dk.dataset.page); return; }
     var w = t.closest('[data-work]');
     if (w) { openWork(w.dataset.work); return; }
     if (t.closest('[data-close]')) { closeRoom(); return; }
@@ -655,6 +830,7 @@
     if (c) copy(c.dataset.copy);
   });
   document.addEventListener('keydown', function (e) {
+    if (deckEl && deckEl.classList.contains('is-open')) { deckKey(e); return; }
     if (e.key === 'Escape') { if (sheet.classList.contains('is-open')) closeWork(); else closeRoom(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button][data-go], [role=button][data-work]')) {
       e.preventDefault(); e.target.click();
@@ -692,8 +868,8 @@
     raf = requestAnimationFrame(frame);
 
     // 等字体和封面图加载，计数到 100% 再撕开
-    var assets = WORKS.filter(function (w) { return w.cover; }).map(function (w) {
-      return new Promise(function (res) { var i = new Image(); i.onload = i.onerror = res; i.src = w.cover; });
+    var assets = realWorks().slice(0, 4).map(function (w) {
+      return new Promise(function (res) { var i = new Image(); i.onload = i.onerror = res; i.src = coverOf(w); });
     });
     if (document.fonts && document.fonts.load) assets.push(document.fonts.load('40px CabinSketch').catch(function () {}));
     if (!assets.length) assets.push(Promise.resolve());
