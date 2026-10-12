@@ -117,7 +117,7 @@
       { go: 'about', side: 'R', d: 1850, zh: '关于', en: 'about me', ic: 'plane' },
       { go: 'skills', side: 'L', d: 2750, zh: '能力', en: 'studio', ic: 'pencil' }
     ],
-    // 墙上挂的作品框（取前两件真实作品）
+    // 墙上挂的作品框（取前两件作品，没有就是空画框）
     frames: [{ side: 'R', d: 1080 }, { side: 'L', d: 1560 }],
     notes: [
       { side: 'L', d: 520, h: .38, t: 'GPA 2 / 33', s: '专业前 6%' },
@@ -243,20 +243,25 @@
       doors.push({ el: el, go: o.go, zh: o.zh, d: o.d });
     });
 
-    // 挂画：真实作品的缩略图，黑白线稿，悬停上色
+    // 挂画：有作品就挂作品的黑白线稿（悬停上色），还没有就挂一个"待落笔"的空画框
     var real = WORKS.filter(function (w) { return !w.placeholder; });
     LAYOUT.frames.forEach(function (o, k) {
-      var w = real[k]; if (!w) return;
+      var w = real[k];
       var fw = Math.round(D.doorW * 1.15), fh = Math.round(fw * 1.2);
       var el = document.createElement('figure');
-      el.className = 'wallframe';
-      el.dataset.work = w.id;
+      el.className = 'wallframe' + (w ? '' : ' wallframe--empty');
       el.setAttribute('role', 'button'); el.tabIndex = 0;
-      el.setAttribute('aria-label', '查看作品：' + w.title);
       el.style.width = fw + 'px'; el.style.height = fh + 'px';
-      el.innerHTML = '<img src="' + esc(w.cover) + '" alt="" loading="lazy">' +
+      if (w) {
+        el.dataset.work = w.id;
+        el.setAttribute('aria-label', '查看作品：' + w.title);
+      } else {
+        el.dataset.go = 'works';
+        el.setAttribute('aria-label', '去作品房间');
+      }
+      el.innerHTML = (w ? '<img src="' + esc(w.cover) + '" alt="" loading="lazy">' : '<div class="wallframe__blank">' + icon('pencil') + '<span>待落笔</span></div>') +
         svg(fw + 20, fh + 20, '<path class="ln ln--bold" d="' + rectPath(3, 3, fw + 14, fh + 14, rng(70 + k), 2) + '"/>', 'wallframe__line') +
-        '<figcaption>No.' + esc(w.no) + ' ' + esc(w.title) + '</figcaption>';
+        '<figcaption>' + (w ? 'No.' + esc(w.no) + ' ' + esc(w.title) : 'No.0' + (k + 1) + ' 作品待落笔') + '</figcaption>';
       place(el, o.side, o.d, fw, H * .12);
     });
 
@@ -440,6 +445,7 @@
   function buildGallery() {
     var cats = ['全部'];
     WORKS.forEach(function (w) { if (!w.placeholder && w.category && cats.indexOf(w.category) < 0) cats.push(w.category); });
+    $('#filters').hidden = cats.length < 3; // 只有一类作品时不需要筛选
     $('#filters').innerHTML = cats.map(function (c, i) {
       return '<button role="tab" aria-selected="' + (i === 0) + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>';
     }).join('');
@@ -449,7 +455,7 @@
       if (w.placeholder) {
         return '<article class="card card--empty rv" data-cat="' + esc(w.category) + '" style="--tilt:' + tilt + 'deg">' +
           '<div class="card__frame"><div class="card__blank">' + icon('pencil') + '<p>待落笔</p><small>new work coming soon</small></div></div>' +
-          '<div class="card__meta"><span class="card__no">No.' + esc(w.no) + '</span><h3>' + esc(w.title) + '</h3><p>' + esc(w.category) + ' · 敬请期待</p></div></article>';
+          '<div class="card__meta"><span class="card__no">No.' + esc(w.no) + '</span><h3>' + esc(w.title) + '</h3><p>' + (w.category ? esc(w.category) + ' · ' : '') + '敬请期待</p></div></article>';
       }
       return '<article class="card rv" data-cat="' + esc(w.category) + '" data-work="' + esc(w.id) + '" tabindex="0" role="button" aria-label="查看作品：' + esc(w.title) + '" style="--tilt:' + tilt + 'deg">' +
         '<div class="card__frame"><span class="tape tape--a"></span><span class="tape tape--b"></span>' +
@@ -688,6 +694,7 @@
       return new Promise(function (res) { var i = new Image(); i.onload = i.onerror = res; i.src = w.cover; });
     });
     if (document.fonts && document.fonts.load) assets.push(document.fonts.load('40px CabinSketch').catch(function () {}));
+    if (!assets.length) assets.push(Promise.resolve());
     var total = assets.length, loaded = 0, shown = 0, t0 = performance.now(), countEl = $('.tear__count');
     assets.forEach(function (p) { p.then(function () { loaded++; }); });
     var minMs = reduce ? 0 : 1300;
@@ -701,7 +708,7 @@
         setTimeout(function () {
           document.body.classList.remove('is-loading');
           var h = location.hash.replace('#', '');
-          // 带锚点打开（如 #works、#work/hbn）就直接进房间，纸撕开时已经在房间里
+          // 带锚点打开（如 #works、#work/作品id）就直接进房间，纸撕开时已经在房间里
           if (h.indexOf('work/') === 0 || (h && $('#room-' + h))) route();
           else tearOpen();
         }, 260);

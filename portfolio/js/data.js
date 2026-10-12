@@ -104,59 +104,37 @@ window.PROFILE = {
 
 /* -------------------------------------------------------------
  * 作品列表
- * 新增作品：复制一个 { ... } 块改内容即可，顺序就是展示顺序。
- *   cover   封面图（建议 4:5 或 16:9，放在 portfolio/covers/）
- *   images  详情页里的图片，可以引用仓库里其他文件夹的图
- *   link    在线地址（没有就留空 ''）
- *   qr      二维码图片（没有就留空 ''）
- *   case    案例拆解：背景 / 洞察 / 创意 / 执行 / 成果，不需要的项可以删掉
- * 还没做好的作品可以写 placeholder: true，会显示成「待落笔」的空画框。
+ * 现在全部是「待落笔」的空画框，作品做好后把对应的空框换成真实内容。
+ * 一件作品的写法（复制下面注释里的模板，去掉 // 即可）：
+ *
+ * {
+ *   id: 'my-work',                 // 英文 id，用在链接里：#work/my-work
+ *   no: '01',
+ *   title: '作品名',
+ *   subtitle: '一句话说明',
+ *   category: '品牌策划',          // 会自动生成顶部筛选按钮
+ *   year: '2026',
+ *   role: '策划 · 文案',
+ *   cover: 'covers/my-work.jpg',   // 封面，建议竖版 4:5，放在 portfolio/covers/
+ *   tags: ['关键词', '关键词'],
+ *   summary: '作品简介',
+ *   case: [                         // 案例拆解，不需要的项可以删
+ *     { k: '背景', v: '...' },
+ *     { k: '洞察', v: '...' },
+ *     { k: '创意', v: '...' },
+ *     { k: '执行', v: '...' },
+ *     { k: '成果', v: '...' }
+ *   ],
+ *   images: ['covers/my-work-1.jpg', 'covers/my-work-2.jpg'],
+ *   link: '',                       // 在线地址，没有就留空
+ *   qr: ''                          // 二维码图片，没有就留空
+ * },
  * ------------------------------------------------------------- */
 window.WORKS = [
-  {
-    id: 'hbn',
-    no: '01',
-    title: '贵妃焕新颜',
-    subtitle: 'HBN 古风互动 H5 小游戏',
-    category: '互动 H5',
-    year: '2026',
-    role: '策划 · 文案 · 插画 · 开发',
-    cover: 'covers/hbn.jpg',
-    tags: ['国潮', '游戏化营销', 'H5', '护肤品'],
-    summary: '子时熬夜吃荔枝的贵妃，第二天要面圣。玩家在铅粉、普通护肤水和 HBN 之间替她挑一样焕颜之物——用「错误选项」的反差把产品功效讲成一个小故事。',
-    case: [
-      { k: '背景', v: 'HBN α-熊果苷焕颜精华水主打提亮、改善暗沉，需要一个年轻人愿意主动点开、玩完还想分享的种草触点。' },
-      { k: '洞察', v: '「熬夜后脸色暗沉」是年轻用户的高频痛点；国潮古风在社交平台有天然的传播力。把现代痛点放进宫廷剧情，熟悉又新鲜。' },
-      { k: '创意', v: '贵妃熬夜 → 照镜子 → 陛下召见，三选一的选择题：铅粉（敏感）、普通护肤水（无效）、HBN（「此乃神颜！」）。失败选项是对比，成功选项是卖点。' },
-      { k: '执行', v: '11 张自绘古风插画页面；分镜逐格入场、水墨转场、印章呼吸按钮等动效；代码合成古筝与箫的背景音乐，无版权风险。' },
-      { k: '转化', v: '结尾页「寸刻呵护 肌肤无忧」，一键跳转购买，形成「玩—懂—买」的闭环。' }
-    ],
-    images: ['../hbn-h5/assets/bg1.jpg', '../hbn-h5/assets/bg3.jpg', '../hbn-h5/assets/bg6.jpg', '../hbn-h5/assets/bg9.jpg'],
-    link: '../hbn-h5/',
-    qr: '../hbn-h5/qrcode.png'
-  },
-  {
-    id: 'youzhisan',
-    no: '02',
-    title: '油纸伞',
-    subtitle: '非遗文化主题网站 · 原创 IP「伞小桐」',
-    category: '品牌视觉',
-    year: '2025',
-    role: '视觉设计 · IP 设计 · 网页制作',
-    cover: 'covers/youzhisan.jpg',
-    tags: ['非遗', 'IP 形象', '网页设计', '新中式'],
-    summary: '「一竹一纸一桐油，半生半世半浮华」。用 5 个页面讲清油纸伞的起源、寓意、制作工艺与创新路径，并设计原创 IP「伞小桐」让传统手艺有一张年轻的脸。',
-    case: [
-      { k: '背景', v: '油纸伞是国家级非物质文化遗产，但在年轻人心中多停留在「古装剧道具」的印象。' },
-      { k: '洞察', v: '传承的难点不在工艺，而在「被看见」。需要一套既讲得清楚、又足够好看的内容载体。' },
-      { k: '创意', v: '知起源 → 看工艺 → 谈创新 → 认识伞小桐，层层递进；IP 以甲路油纸伞伞骨为裙摆、筷子作发簪，新中式造型。' },
-      { k: '执行', v: '全部视觉在 Photoshop 中完成，宣纸底纹配古画人物与朱红印章；HTML + CSS + JS 实现悬停动效、步骤高亮与成伞轮播；含人设卡、三视图与 6 个 Q 版表情包。' }
-    ],
-    images: ['covers/youzhisan.jpg', '../youzhisan/images/10.png', '../youzhisan/images/2.png', '../youzhisan/images/3.png'],
-    link: '../youzhisan/',
-    qr: '../youzhisan/qrcode.png'
-  },
-  { id: 'p3', no: '03', placeholder: true, title: '作品待落笔', category: '策划案' },
-  { id: 'p4', no: '04', placeholder: true, title: '作品待落笔', category: '新媒体' },
-  { id: 'p5', no: '05', placeholder: true, title: '作品待落笔', category: '平面' }
+  { id: 'p1', no: '01', placeholder: true, title: '作品待落笔' },
+  { id: 'p2', no: '02', placeholder: true, title: '作品待落笔' },
+  { id: 'p3', no: '03', placeholder: true, title: '作品待落笔' },
+  { id: 'p4', no: '04', placeholder: true, title: '作品待落笔' },
+  { id: 'p5', no: '05', placeholder: true, title: '作品待落笔' },
+  { id: 'p6', no: '06', placeholder: true, title: '作品待落笔' }
 ];
