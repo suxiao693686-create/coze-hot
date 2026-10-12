@@ -26,6 +26,8 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  // 在受限的嵌入页面里改地址栏可能会报错，失败就忽略
+  function hist(method, url) { try { history[method](null, '', url); } catch (e) {} }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function f(n) { return Math.round(n * 10) / 10; }
 
@@ -408,7 +410,7 @@
       room.scrollTop = 0;
       document.body.classList.add('in-room');
       current = name;
-      if (!fromHash) history.pushState(null, '', '#' + name);
+      if (!fromHash) hist('pushState', '#' + name);
       markNav();
       return tearOpen();
     }).then(function () { revealIn(room); room.focus({ preventScroll: true }); });
@@ -419,7 +421,7 @@
       $$('.room').forEach(function (r) { r.classList.remove('is-active'); });
       document.body.classList.remove('in-room');
       current = null;
-      if (!fromHash) history.pushState(null, '', location.pathname + location.search);
+      if (!fromHash) hist('pushState', location.pathname + location.search);
       markNav();
       return tearOpen();
     });
@@ -527,7 +529,7 @@
     sheet.classList.add('is-open');
     document.body.classList.add('in-sheet');
     sheetPaper.scrollTop = 0;
-    if (!fromHash) history.replaceState(null, '', '#work/' + w.id);
+    if (!fromHash) hist('replaceState', '#work/' + w.id);
     setTimeout(function () { $('.sheet__x', sheetPaper).focus({ preventScroll: true }); }, 50);
   }
   function closeWork() {
@@ -535,7 +537,7 @@
     sheet.classList.remove('is-open');
     sheet.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('in-sheet');
-    history.replaceState(null, '', current ? '#' + current : location.pathname + location.search);
+    hist('replaceState', current ? '#' + current : location.pathname + location.search);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   }
 
