@@ -540,14 +540,15 @@
     if (w.deck) {
       var thumbs = '';
       for (var n = 1; n <= w.deck.count; n++) {
-        thumbs += '<button data-deck="' + esc(w.id) + '" data-page="' + n + '" aria-label="从第 ' + n + ' 页开始看">' +
-          '<img src="' + esc(deckSrc(w, n, true)) + '" alt="" loading="lazy"><i>' + n + '</i></button>';
+        var hasVideo = (w.deck.videos || []).some(function (v) { return v.page === n; });
+        thumbs += '<button data-deck="' + esc(w.id) + '" data-page="' + n + '" aria-label="从第 ' + n + ' 页开始看' + (hasVideo ? '（含视频）' : '') + '">' +
+          '<img src="' + esc(deckSrc(w, n, true)) + '" alt="" loading="lazy"><i>' + n + '</i>' + (hasVideo ? '<em>▶ 视频</em>' : '') + '</button>';
       }
       deck = '<div class="deckbox">' +
         '<button class="deckbox__play" data-deck="' + esc(w.id) + '" data-page="1">' +
         '<img src="' + esc(deckSrc(w, 1)) + '" alt="' + esc(w.title) + ' 第 1 页">' +
         '<span><b>▶</b>全屏翻阅 · 共 ' + w.deck.count + ' 页</span></button>' +
-        '<p class="deckbox__tip">点任意一页从那里开始看 · 键盘 ← → 翻页</p>' +
+        '<p class="deckbox__tip">点任意一页从那里开始看 · 键盘 ← → 翻页' + ((w.deck.videos || []).length ? ' · 带 ▶ 的页面可以播放视频' : '') + '</p>' +
         '<div class="deckbox__grid">' + thumbs + '</div></div>';
     }
 
@@ -607,13 +608,16 @@
       '<button class="deck__x" data-deck-close aria-label="关闭">×</button></div></header>' +
       '<div class="deck__stage">' +
       '<button class="deck__nav deck__nav--prev" data-deck-step="-1" aria-label="上一页">‹</button>' +
-      '<figure class="deck__slide"><img alt=""><span class="deck__spin" aria-hidden="true"></span><figcaption class="deck__tip">左右滑动翻页 · 横过来看更清楚</figcaption></figure>' +
+      '<figure class="deck__slide"><div class="deck__frame"><img alt=""><div class="deck__media"></div></div>' +
+      '<span class="deck__spin" aria-hidden="true"></span><figcaption class="deck__tip">左右滑动翻页 · 横过来看更清楚</figcaption></figure>' +
       '<button class="deck__nav deck__nav--next" data-deck-step="1" aria-label="下一页">›</button></div>' +
       '<div class="deck__progress"><i></i></div>' +
       '<nav class="deck__rail" aria-label="页面缩略图"></nav>';
     document.body.appendChild(deckEl);
     deckImg = $('.deck__slide img', deckEl);
     if (!document.fullscreenEnabled) $('.deck__fs', deckEl).hidden = true;
+    addEventListener('resize', fitDeck);
+    document.addEventListener('fullscreenchange', function () { setTimeout(fitDeck, 60); });
 
     deckEl.addEventListener('click', function (e) {
       var t = e.target;
@@ -621,6 +625,12 @@
       if (t.closest('[data-deck-fs]')) {
         if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
         else if (deckEl.requestFullscreen) deckEl.requestFullscreen().catch(function () {});
+        return;
+      }
+      var vb = t.closest('.deck__vbtn');
+      if (vb) {
+        vb.outerHTML = '<video class="deck__video" style="' + vb.getAttribute('style') + '" src="' + esc(vb.dataset.src) +
+          '" controls autoplay playsinline></video>';
         return;
       }
       var st = t.closest('[data-deck-step]');
@@ -631,13 +641,16 @@
     // 点幻灯片左边三分之一往回翻，其余往后翻；手机上左右滑动翻页
     var sx = null, sy = 0;
     var slide = $('.deck__slide', deckEl);
-    slide.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; });
+    slide.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('.deck__media > *')) { sx = null; return; } // 点视频本身不翻页
+      sx = e.clientX; sy = e.clientY;
+    });
     slide.addEventListener('pointerup', function (e) {
       if (sx === null) return;
       var dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
       if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) return deckGo(deckN + (dx < 0 ? 1 : -1));
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-        var b = slide.getBoundingClientRect();
+        var b = $('.deck__frame', deckEl).getBoundingClientRect();
         deckGo(deckN + (e.clientX - b.left < b.width / 3 ? -1 : 1));
       }
     });
@@ -666,6 +679,7 @@
     if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
     deckEl.classList.remove('is-open');
     document.body.classList.remove('in-deck');
+    $('.deck__media', deckEl).innerHTML = '';
     deckW = null;
     if (deckFocus && deckFocus.focus) deckFocus.focus({ preventScroll: true });
   }
@@ -687,12 +701,19 @@
       if (on) b.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reduce ? 'auto' : 'smooth' });
     });
     deckEl.classList.add('is-loading');
+    $('.deck__media', deckEl).innerHTML = ''; // 翻页时停掉正在放的视频
     var img = new Image();
     img.src = src;
     var show = function () {
       if (deckW !== w || deckN !== n) return; // 已经翻到别的页了
       deckImg.src = src;
       deckImg.alt = w.title + ' 第 ' + n + ' 页';
+      fitDeck();
+      // 这一页如果有视频，在 PPT 里原来的位置放一个播放按钮
+      $('.deck__media', deckEl).innerHTML = (w.deck.videos || []).filter(function (v) { return v.page === n; }).map(function (v) {
+        return '<button class="deck__vbtn" data-src="' + esc(v.src) + '" aria-label="播放视频" style="left:' + v.x + '%;top:' + v.y + '%;width:' + v.w + '%;height:' + v.h + '%">' +
+          '<span><b>▶</b>播放视频</span></button>';
+      }).join('');
       deckEl.classList.remove('is-loading');
       deckImg.classList.remove('is-in', 'is-back');
       void deckImg.offsetWidth;
@@ -703,8 +724,18 @@
     // 提前加载前后几页，翻页时不用等
     [n + 1, n + 2, n - 1].forEach(function (k) { if (k >= 1 && k <= total) (new Image()).src = deckSrc(w, k); });
   }
+  // 幻灯片按原比例放进可用区域，视频按钮按百分比叠在上面才对得准
+  function fitDeck() {
+    if (!deckEl || !deckEl.classList.contains('is-open')) return;
+    var box = $('.deck__slide', deckEl).getBoundingClientRect(), frame = $('.deck__frame', deckEl);
+    var r = deckImg.naturalWidth && deckImg.naturalHeight ? deckImg.naturalWidth / deckImg.naturalHeight : 16 / 9;
+    var w = Math.min(box.width, box.height * r);
+    frame.style.width = Math.floor(w) + 'px';
+    frame.style.height = Math.floor(w / r) + 'px';
+  }
   function deckKey(e) {
     var k = e.key;
+    if (e.target.tagName === 'VIDEO' && k !== 'Escape') return;
     if (k === 'Escape') closeDeck();
     else if (k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' ') deckGo(deckN + 1);
     else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp') deckGo(deckN - 1);
