@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>周琳 · 作品集</title>
+  <meta name="description" content="周琳 · 广告策划 / 创意文案 / 品牌策划作品集。广告学本科 2026 届，意向城市杭州。">
+  <meta name="theme-color" content="#f3efe6">
+  <link rel="preload" href="fonts/CabinSketch-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="is-loading">
+
+  <!-- 手绘滤镜：让线条带一点铅笔抖动 -->
+  <svg class="defs" aria-hidden="true" width="0" height="0">
+    <filter id="rough" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="rough-lg" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="8" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+
+  <!-- 撕纸加载 / 转场 -->
+  <div class="tear" id="tear" aria-hidden="true">
+    <div class="tear__half tear__half--l"></div>
+    <div class="tear__half tear__half--r"></div>
+    <svg class="tear__line" viewBox="0 0 100 100" preserveAspectRatio="none"><path/></svg>
+    <div class="tear__label">
+      <span class="tear__count">0</span><small>%</small>
+      <em>正在削铅笔…</em>
+    </div>
+  </div>
+
+  <!-- 顶部 -->
+  <header class="hud">
+    <a class="seal" href="#" data-go="home" aria-label="回到走廊入口">
+      <span>周</span><span>琳</span>
+    </a>
+    <nav class="hud__nav" aria-label="房间">
+      <button data-go="works"><b>作品</b><i>works</i></button>
+      <button data-go="about"><b>关于</b><i>about</i></button>
+      <button data-go="skills"><b>能力</b><i>studio</i></button>
+      <button data-go="contact"><b>联系</b><i>contact</i></button>
+    </nav>
+  </header>
+
+  <!-- 主场景：一条手绘走廊，向下滚动就往里走 -->
+  <main class="corridor" id="corridor">
+    <div class="stage" id="stage">
+      <div class="world" id="world"></div>
+
+      <div class="doodles" id="doodles" aria-hidden="true"></div>
+
+      <section class="hero" id="hero">
+        <p class="hero__hi">hello, i'm</p>
+        <h1 class="hero__name">
+          <span class="hero__zh">周琳</span>
+          <span class="hero__en">ZHOU&nbsp;LIN</span>
+        </h1>
+        <p class="hero__role">‹ <span id="roleText"></span> /›</p>
+      </section>
+
+      <div class="scroll-hint" id="scrollHint">
+        <span>向前走</span>
+        <svg viewBox="0 0 24 40"><path d="M12 3 C11 14 13 24 12 35 M5 28 L12 36 L19 28"/></svg>
+      </div>
+
+      <div class="steps" id="steps" aria-hidden="true"><i></i></div>
+    </div>
+  </main>
+
+  <!-- 房间（全屏纸页） -->
+  <div class="rooms" id="rooms">
+
+    <section tabindex="-1" class="room room--works" id="room-works" data-room="works" aria-label="作品">
+      <button class="room__close" data-close aria-label="回到走廊">← 回走廊</button>
+      <div class="room__inner">
+        <header class="room__head">
+          <span class="room__no">Room 01</span>
+          <h2>作品<em>gallery</em></h2>
+          <p>每一张纸，都是一次从洞察到落地的尝试。把鼠标移上去，给它上色。</p>
+        </header>
+        <div class="filters" id="filters" role="tablist"></div>
+        <div class="gallery" id="gallery"></div>
+      </div>
+    </section>
+
+    <section tabindex="-1" class="room room--about" id="room-about" data-room="about" aria-label="关于我">
+      <button class="room__close" data-close aria-label="回到走廊">← 回走廊</button>
+      <div class="room__inner">
+        <header class="room__head">
+          <span class="room__no">Room 02</span>
+          <h2>关于<em>about me</em></h2>
+        </header>
+        <div class="about" id="about"></div>
+      </div>
+    </section>
+
+    <section tabindex="-1" class="room room--skills" id="room-skills" data-room="skills" aria-label="能力与荣誉">
+      <button class="room__close" data-close aria-label="回到走廊">← 回走廊</button>
+      <div class="room__inner">
+        <header class="room__head">
+          <span class="room__no">Room 03</span>
+          <h2>工作室<em>studio</em></h2>
+          <p>工具箱、奖状墙，和几张贴在显示器边上的便利贴。</p>
+        </header>
+        <div class="studio" id="studio"></div>
+      </div>
+    </section>
+
+    <section tabindex="-1" class="room room--contact" id="room-contact" data-room="contact" aria-label="联系我">
+      <button class="room__close" data-close aria-label="回到走廊">← 回走廊</button>
+      <div class="room__inner">
+        <div class="letter" id="letter"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 作品详情 -->
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="sheet__backdrop" data-sheet-close></div>
+    <article class="sheet__paper" id="sheetPaper"></article>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
