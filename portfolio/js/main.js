@@ -248,7 +248,7 @@
     // 挂画：有作品就挂作品的黑白线稿（悬停上色），还没有就挂一个"待落笔"的空画框
     var real = realWorks();
     LAYOUT.frames.forEach(function (o, k) {
-      var w = real[k], wide = w && w.deck;
+      var w = real[k], wide = w && w.deck && (w.deck.ratio || 16 / 9) > 1;
       var fw = Math.round(D.doorW * (wide ? 1.7 : 1.15)), fh = Math.round(wide ? fw * .62 : fw * 1.2);
       var el = document.createElement('figure');
       el.className = 'wallframe' + (w ? '' : ' wallframe--empty');
@@ -469,12 +469,14 @@
         '<div class="card__meta"><span class="card__no">No.' + no + (mod.name ? ' · ' + esc(mod.name) : '') + '</span><h3>' + esc(w.title) + '</h3><p>' + esc(w.note || '敬请期待') + '</p></div></article>';
     }
     var cover = coverOf(w);
-    var info = ['No.' + no, mod.name, w.year, w.deck ? w.deck.count + ' 页' : ''].filter(Boolean).map(esc).join(' · ');
+    var info = ['No.' + no, mod.name, w.year, w.deck ? w.deck.count + ' 页' : w.article ? '长文' : ''].filter(Boolean).map(esc).join(' · ');
+    var pos = w.coverPos ? ' style="object-position:' + esc(w.coverPos) + '"' : '';
+    var cta = w.article ? '阅读全文 →' : w.deck ? (w.module === 'ppt' ? '翻阅 PPT →' : '逐页翻阅 →') : '打开看看 →';
     return '<article class="card rv" data-work="' + esc(w.id) + '" tabindex="0" role="button" aria-label="查看作品：' + esc(w.title) + '" style="--tilt:' + tilt + 'deg">' +
       '<div class="card__frame"><span class="tape tape--a"></span><span class="tape tape--b"></span>' +
-      '<img class="card__img card__img--sketch" src="' + esc(cover) + '" alt="" loading="lazy">' +
-      '<img class="card__img card__img--color" src="' + esc(cover) + '" alt="' + esc(w.title) + '" loading="lazy">' +
-      '<span class="card__cta">' + (w.deck ? '翻阅 PPT →' : '打开看看 →') + '</span></div>' +
+      '<img class="card__img card__img--sketch" src="' + esc(cover) + '" alt="" loading="lazy"' + pos + '>' +
+      '<img class="card__img card__img--color" src="' + esc(cover) + '" alt="' + esc(w.title) + '" loading="lazy"' + pos + '>' +
+      '<span class="card__cta">' + cta + '</span></div>' +
       '<div class="card__meta"><span class="card__no">' + info + '</span>' +
       '<h3>' + esc(w.title) + '</h3><p>' + esc(w.subtitle || '') + '</p>' +
       '<ul class="tags">' + (w.tags || []).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul></div></article>';
@@ -544,12 +546,22 @@
         thumbs += '<button data-deck="' + esc(w.id) + '" data-page="' + n + '" aria-label="从第 ' + n + ' 页开始看' + (hasVideo ? '（含视频）' : '') + '">' +
           '<img src="' + esc(deckSrc(w, n, true)) + '" alt="" loading="lazy"><i>' + n + '</i>' + (hasVideo ? '<em>▶ 视频</em>' : '') + '</button>';
       }
-      deck = '<div class="deckbox">' +
+      var ratio = w.deck.ratio || 16 / 9;
+      deck = '<div class="deckbox' + (ratio < 1 ? ' deckbox--tall' : '') + '" style="--ratio:' + ratio + '">' +
         '<button class="deckbox__play" data-deck="' + esc(w.id) + '" data-page="1">' +
         '<img src="' + esc(deckSrc(w, 1)) + '" alt="' + esc(w.title) + ' 第 1 页">' +
         '<span><b>▶</b>全屏翻阅 · 共 ' + w.deck.count + ' 页</span></button>' +
         '<p class="deckbox__tip">点任意一页从那里开始看 · 键盘 ← → 翻页' + ((w.deck.videos || []).length ? ' · 带 ▶ 的页面可以播放视频' : '') + '</p>' +
         '<div class="deckbox__grid">' + thumbs + '</div></div>';
+    }
+
+    if (w.article) {
+      var a = w.article;
+      deck = '<div class="articlebox">' +
+        '<button class="articlebox__peek" data-read="' + esc(w.id) + '">' +
+        '<img src="' + esc(a.dir + 'long-01.webp') + '" alt="' + esc(w.title) + ' 开头">' +
+        '<span><b>▶</b>阅读全文</span></button>' +
+        '<p class="deckbox__tip">像在手机上读公众号一样，从上往下滑就行</p></div>';
     }
 
     sheetPaper.innerHTML =
@@ -600,7 +612,7 @@
     deckEl.className = 'deck';
     deckEl.setAttribute('role', 'dialog');
     deckEl.setAttribute('aria-modal', 'true');
-    deckEl.setAttribute('aria-label', 'PPT 翻阅');
+    deckEl.setAttribute('aria-label', '作品翻阅');
     deckEl.innerHTML =
       '<header class="deck__bar"><b class="deck__title"></b>' +
       '<span class="deck__count mono"><i></i> / <span></span></span>' +
@@ -660,6 +672,8 @@
     if (!w) return;
     if (!deckEl) buildDeck();
     deckW = w;
+    deckEl.style.setProperty('--ratio', w.deck.ratio || 16 / 9);
+    $('.deck__tip', deckEl).textContent = (w.deck.ratio || 16 / 9) < 1 ? '左右滑动翻页 · 双指放大看细节' : '左右滑动翻页 · 横过来看更清楚';
     deckFocus = document.activeElement;
     $('.deck__title', deckEl).textContent = w.title;
     $('.deck__count span', deckEl).textContent = w.deck.count;
@@ -743,6 +757,57 @@
     else if (k === 'End') deckGo(deckW.deck.count);
     else return;
     e.preventDefault();
+  }
+
+  /* ---------- 长文阅读器：公众号长图从上往下读 ---------- */
+  var readerEl, readerFocus;
+  function buildReader() {
+    readerEl = document.createElement('div');
+    readerEl.className = 'reader';
+    readerEl.setAttribute('role', 'dialog');
+    readerEl.setAttribute('aria-modal', 'true');
+    readerEl.setAttribute('aria-label', '阅读全文');
+    readerEl.innerHTML =
+      '<header class="deck__bar"><b class="deck__title"></b>' +
+      '<span class="deck__count mono"><i>0</i>%</span>' +
+      '<div class="deck__tools"><button class="deck__x" data-reader-close aria-label="关闭">×</button></div></header>' +
+      '<div class="deck__progress"><i></i></div>' +
+      '<div class="reader__scroll" tabindex="0"><div class="reader__col"></div></div>';
+    document.body.appendChild(readerEl);
+    var sc = $('.reader__scroll', readerEl);
+    sc.addEventListener('scroll', function () {
+      var max = sc.scrollHeight - sc.clientHeight, pct = max > 0 ? Math.round(sc.scrollTop / max * 100) : 0;
+      $('.deck__count i', readerEl).textContent = pct;
+      $('.deck__progress i', readerEl).style.width = pct + '%';
+    }, { passive: true });
+    readerEl.addEventListener('click', function (e) { if (e.target.closest('[data-reader-close]')) closeReader(); });
+  }
+  function openReader(id) {
+    var w = WORKS.filter(function (x) { return x.id === id && x.article; })[0];
+    if (!w) return;
+    if (!readerEl) buildReader();
+    var a = w.article, seg = a.segment || 2400, html = '';
+    for (var n = 1; n <= a.count; n++) {
+      var h = n < a.count ? seg : a.height - seg * (a.count - 1);
+      html += '<img src="' + esc(a.dir + 'long-' + pad(n, 2) + '.webp') + '" width="' + a.width + '" height="' + h + '"' +
+        (n === 1 ? ' alt="' + esc(w.title) + '"' : ' alt=""') + (n > 2 ? ' loading="lazy"' : '') + '>';
+    }
+    readerFocus = document.activeElement;
+    $('.deck__title', readerEl).textContent = w.title;
+    $('.reader__col', readerEl).innerHTML = html;
+    var sc = $('.reader__scroll', readerEl);
+    sc.scrollTop = 0;
+    $('.deck__count i', readerEl).textContent = 0;
+    $('.deck__progress i', readerEl).style.width = '0%';
+    readerEl.classList.add('is-open');
+    document.body.classList.add('in-deck');
+    setTimeout(function () { sc.focus({ preventScroll: true }); }, 50);
+  }
+  function closeReader() {
+    if (!readerEl || !readerEl.classList.contains('is-open')) return;
+    readerEl.classList.remove('is-open');
+    document.body.classList.remove('in-deck');
+    if (readerFocus && readerFocus.focus) readerFocus.focus({ preventScroll: true });
   }
 
   /* ---------- 关于 ---------- */
@@ -851,6 +916,8 @@
       else if (current) openRoom(g); else enterDoor(g);
       return;
     }
+    var rd = t.closest('[data-read]');
+    if (rd) { openReader(rd.dataset.read); return; }
     var dk = t.closest('[data-deck]');
     if (dk) { openDeck(dk.dataset.deck, +dk.dataset.page); return; }
     var w = t.closest('[data-work]');
@@ -862,6 +929,7 @@
   });
   document.addEventListener('keydown', function (e) {
     if (deckEl && deckEl.classList.contains('is-open')) { deckKey(e); return; }
+    if (readerEl && readerEl.classList.contains('is-open')) { if (e.key === 'Escape') closeReader(); return; }
     if (e.key === 'Escape') { if (sheet.classList.contains('is-open')) closeWork(); else closeRoom(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button][data-go], [role=button][data-work]')) {
       e.preventDefault(); e.target.click();
