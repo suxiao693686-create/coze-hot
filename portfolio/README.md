@@ -2,7 +2,19 @@
 
 一条用铅笔画出来的走廊：向下滚动往里走，推开门进入房间。灵感来自 [ITom 的 3D 作品集](https://github.com/ITomPoland/portfolio-itom)，这里用纯 HTML / CSS / JS（CSS 3D）重新做了一版，不需要安装或构建，直接放到 GitHub Pages 就能访问，手机也能流畅打开。
 
-线上地址（同步到 `gh-pages` 分支后生效）：`https://suxiao693686-create.github.io/coze-hot/portfolio/`
+线上地址：**https://suxiao693686-create.github.io/coze-hot/portfolio/**
+
+`qrcode.png` 是指向这个网址的二维码（可以放进简历），`qrcode-card.png` 是带名字的卡片版（可以单独发给别人）。二维码是静态的，不会过期。
+
+## 发布
+
+GitHub Pages 从仓库的 `gh-pages` 分支发布。改完作品后把改动推到 `gh-pages`，1～2 分钟后线上就会更新：
+
+```bash
+git push origin <改动所在的分支>:gh-pages
+```
+
+仓库根目录的 `.nojekyll` 让 Pages 直接发布静态文件，不要删除。国内部分网络访问 github.io 会慢，偶尔打不开；需要更稳的话，可以把整个仓库的静态文件传到腾讯云 COS、阿里云 OSS 这类静态网站托管，再用 `python3 portfolio/tools/make_qr.py 新网址` 重新生成二维码（作品集里的 H5 和网页作品引用了仓库里的 `hbn-h5/`、`youzhisan/`，要一起传）。
 
 ## 页面结构
 
@@ -70,7 +82,7 @@ python3 portfolio/tools/vid2web.py 宣传片.mov xunwei
 
 ### 其他作品
 
-把一个 `placeholder: true` 的「待落笔」空框，换成 `data.js` 注释里的作品模板，填好 `id`、`title`、`cover`、`images`、`case` 等字段。新的作品类型就在 `MODULES` 里加一个模块。走廊墙上的两个画框默认取前两件作品。
+把一个 `placeholder: true` 的「待落笔」空框，换成 `data.js` 注释里的作品模板，填好 `id`、`title`、`cover`、`images`、`case` 等字段。新的作品类型就在 `MODULES` 里加一个模块。走廊墙上的两个画框会从不同模块里各取第一件作品。
 
 ## 其他可以改的
 
@@ -92,6 +104,8 @@ portfolio/
 ├── tools/ppt2web.py  ← PPT / PDF 转网页图片（含 PPT 里的视频）
 ├── tools/img2web.py  ← 图片 / 长图转网页格式
 ├── tools/vid2web.py  ← 视频转网页格式
+├── tools/make_qr.py  ← 生成作品集二维码
+├── qrcode.png / qrcode-card.png  ← 作品集二维码
 └── fonts/CabinSketch-Bold.ttf   ← 手绘英文字体（SIL OFL 开源授权）
 ```
 

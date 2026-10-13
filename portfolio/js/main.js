@@ -246,9 +246,14 @@
     });
 
     // 挂画：有作品就挂作品的黑白线稿（悬停上色），还没有就挂一个"待落笔"的空画框
-    var real = realWorks();
+    // 挂画尽量取不同模块的作品，走廊里能看到不同类型
+    var real = realWorks(), picks = [];
+    real.forEach(function (w) {
+      if (picks.length < LAYOUT.frames.length && !picks.some(function (p) { return p.module === w.module; })) picks.push(w);
+    });
+    real.forEach(function (w) { if (picks.length < LAYOUT.frames.length && picks.indexOf(w) < 0) picks.push(w); });
     LAYOUT.frames.forEach(function (o, k) {
-      var w = real[k], wide = w && w.deck && (w.deck.ratio || 16 / 9) > 1;
+      var w = picks[k], wide = w && w.deck && (w.deck.ratio || 16 / 9) > 1;
       var fw = Math.round(D.doorW * (wide ? 1.7 : 1.15)), fh = Math.round(wide ? fw * .62 : fw * 1.2);
       var el = document.createElement('figure');
       el.className = 'wallframe' + (w ? '' : ' wallframe--empty');
