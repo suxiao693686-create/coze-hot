@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>照眼明 · 塔山石榴</title>
+<style>
+@font-face{font-family:'Serif';font-weight:400;src:url('fonts/NotoSerifSC-400.ttf'),url('https://fonts.gstatic.com/s/notoserifsc/v36/H4cyBXePl9DZ0Xe7gG9cyOj7uK2-n-D2rd4FY7SCqyWv.ttf');}
+@font-face{font-family:'Serif';font-weight:600;src:url('fonts/NotoSerifSC-600.ttf'),url('https://fonts.gstatic.com/s/notoserifsc/v36/H4cyBXePl9DZ0Xe7gG9cyOj7uK2-n-D2rd4FY7RcrCWv.ttf');}
+@font-face{font-family:'Serif';font-weight:900;src:url('fonts/NotoSerifSC-900.ttf'),url('https://fonts.gstatic.com/s/notoserifsc/v36/H4cyBXePl9DZ0Xe7gG9cyOj7uK2-n-D2rd4FY7QrrCWv.ttf');}
+@font-face{font-family:'Brush';src:url('fonts/MaShanZheng.ttf'),url('https://fonts.gstatic.com/s/mashanzheng/v18/NaPecZTRCLxvwo41b4gvzkXaRMQ.ttf');}
+
+:root{
+  --paper:#F3ECDF;
+  --paper-deep:#E9DFCD;
+  --ink:#231C17;
+  --ink-soft:#5E554C;
+  --ink-faint:#9A8F82;
+  --red:#A8201C;
+  --red-bright:#C8352B;
+  --red-deep:#6E1214;
+  --gold:#B8925A;
+  --gold-soft:#D9BD8C;
+  --leaf:#4F5B34;
+  --rule:rgba(35,28,23,.14);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#2a2420;font-family:'Serif',serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+
+.page{width:1080px;height:1440px;position:relative;overflow:hidden;margin:0 auto 40px;}
+.cream{background-color:var(--paper);}
+.crimson{background:radial-gradient(120% 90% at 70% 30%,#9C1C1B 0%,#7A1416 55%,#4E0B0E 100%);color:var(--paper);}
+/* 宣纸纹理 */
+.page::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='540' height='540'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .3  0 0 0 0 .22  0 0 0 0 .15  0 0 0 .10 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1080' height='1440'><filter id='m'><feTurbulence type='fractalNoise' baseFrequency='.006 .012' numOctaves='4' seed='7'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .33  0 0 0 0 .2  0 0 0 .16 0'/></filter><rect width='100%' height='100%' filter='url(%23m)'/></svg>");
+}
+.crimson::before{opacity:.9;mix-blend-mode:multiply}
+.page::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(130% 100% at 50% 45%,transparent 60%,rgba(80,50,30,.10) 100%);}
+.crimson::after{background:radial-gradient(130% 100% at 50% 45%,transparent 55%,rgba(20,0,0,.35) 100%);}
+.page > *{position:relative;z-index:1}
+
+/* 公共页眉页脚 */
+.topbar{position:absolute;top:64px;left:96px;right:96px;display:flex;justify-content:space-between;align-items:center;
+  font-size:21px;letter-spacing:.32em;color:var(--ink-faint)}
+.topbar .no{letter-spacing:.12em;font-variant-numeric:tabular-nums}
+.topbar .no b{color:var(--red);font-weight:600}
+.foot{position:absolute;left:96px;bottom:64px;display:flex;align-items:center;gap:18px;font-size:20px;letter-spacing:.3em;color:var(--ink-faint)}
+
+.seal{display:inline-flex;align-items:center;justify-content:center;background:var(--red);color:var(--paper);
+  font-family:'Brush';line-height:1;border-radius:6px;box-shadow:inset 0 0 0 3px rgba(243,236,223,.25)}
+.seal.sm{width:36px;height:60px;font-size:21px;writing-mode:vertical-rl;letter-spacing:0;border-radius:5px}
+
+/* ---------- 封面 ---------- */
+.cover .title{position:absolute;right:120px;top:150px;writing-mode:vertical-rl;font-family:'Brush';font-size:250px;line-height:1;
+  color:#F6EBDD;letter-spacing:.02em;text-shadow:0 6px 30px rgba(30,0,0,.35)}
+.cover .sub{position:absolute;right:400px;top:180px;writing-mode:vertical-rl;font-size:40px;letter-spacing:.42em;color:var(--gold-soft);font-weight:600}
+.cover .sub::before{content:"";display:inline-block;width:2px;height:70px;background:var(--gold-soft);opacity:.6;margin-bottom:28px}
+.cover .poem{position:absolute;left:110px;top:200px;writing-mode:vertical-rl;font-size:30px;line-height:2.1;letter-spacing:.32em;color:rgba(246,235,221,.82)}
+.cover .poem .by{font-size:22px;letter-spacing:.3em;color:var(--gold-soft);margin-right:22px;padding-top:150px}
+.cover .seal-lg{position:absolute;right:136px;top:960px;width:92px;height:92px;background:#F1E4D0;color:var(--red);font-family:'Brush';
+  font-size:40px;line-height:1.02;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;border-radius:8px;
+  box-shadow:inset 0 0 0 4px #F1E4D0,inset 0 0 0 6px var(--red)}
+.cover .bottom{position:absolute;left:110px;right:110px;bottom:92px;border-top:1px solid rgba(217,189,140,.45);padding-top:30px;
+  display:flex;justify-content:space-between;align-items:flex-end}
+.cover .bottom .k{font-size:34px;letter-spacing:.28em;color:#F6EBDD;font-weight:600}
+.cover .bottom .k small{display:block;font-size:22px;letter-spacing:.42em;color:var(--gold-soft);font-weight:400;margin-top:14px}
+.cover .bottom .tag{font-size:21px;letter-spacing:.3em;color:var(--gold-soft);text-align:right;line-height:1.8}
+.cover .art{position:absolute;left:0;top:640px;width:1080px;height:640px;z-index:0}
+
+/* ---------- 正文页（策划） ---------- */
+.head{position:absolute;left:96px;top:140px;right:96px;display:flex;align-items:flex-end;gap:28px;padding-bottom:30px;border-bottom:1px solid var(--rule)}
+.head h2{font-family:'Brush';font-weight:400;font-size:96px;line-height:1;color:var(--red)}
+.head .en{font-size:22px;letter-spacing:.34em;color:var(--ink-faint);padding-bottom:12px}
+.plan{position:absolute;left:96px;right:96px;top:300px}
+.sec{display:grid;grid-template-columns:76px 1fr;column-gap:24px;margin-bottom:34px}
+.sec .num{font-family:'Brush';font-size:56px;line-height:1;color:var(--red);padding-top:2px}
+.sec h3{font-size:34px;font-weight:900;letter-spacing:.08em;margin-bottom:14px;display:flex;align-items:baseline;gap:18px}
+.sec h3 em{font-style:normal;font-weight:400;font-size:24px;letter-spacing:.2em;color:var(--red)}
+.sec p{font-size:27px;line-height:1.78;color:var(--ink-soft);text-align:justify}
+.sec p b{color:var(--ink);font-weight:600}
+.sec p .r{color:var(--red);font-weight:600}
+.spec{display:grid;grid-template-columns:auto 1fr;column-gap:22px;row-gap:4px;font-size:26px;line-height:1.6;color:var(--ink-soft)}
+.spec dt{color:var(--red);font-weight:600;letter-spacing:.1em}
+
+/* 叙事结构 */
+.timeline{position:absolute;left:96px;right:96px;top:296px}
+.tl-row{display:grid;grid-template-columns:110px 1fr 150px;align-items:center;column-gap:26px;padding:13px 0;border-bottom:1px dashed var(--rule);position:relative}
+.tl-row .ch{font-family:'Brush';font-size:58px;line-height:1;color:var(--red);text-align:center}
+.tl-row .ttl{font-size:33px;font-weight:900;letter-spacing:.1em}
+.tl-row .ttl span{font-weight:400;font-size:23px;letter-spacing:.2em;color:var(--ink-faint);margin-left:16px}
+.tl-row .ds{font-size:25px;color:var(--ink-soft);margin-top:6px;letter-spacing:.04em}
+.tl-row .mood{justify-self:end;display:flex;align-items:center;gap:12px;font-size:22px;letter-spacing:.2em;color:var(--ink-faint)}
+.dots{display:flex;gap:6px}
+.dots i{width:12px;height:12px;border-radius:50%;background:rgba(168,32,28,.16)}
+.dots i.on{background:var(--red)}
+.quotes{position:absolute;left:96px;right:96px;bottom:136px;background:rgba(168,32,28,.055);border-left:4px solid var(--red);padding:24px 34px}
+.quotes .lbl{font-size:22px;letter-spacing:.4em;color:var(--red);margin-bottom:14px;font-weight:600}
+.quotes p{font-size:27px;line-height:1.76;color:var(--ink)}
+
+/* ---------- 章节页 ---------- */
+.chap .mark{position:absolute;left:84px;top:122px;font-family:'Brush';font-size:200px;line-height:1;color:var(--red)}
+.chap .mark.wide{left:70px}
+.chap .meta{position:absolute;left:310px;top:150px;border-left:2px solid var(--red);padding-left:34px}
+.chap .meta h2{font-size:68px;font-weight:900;letter-spacing:.14em;line-height:1.1}
+.chap .meta .season{margin-top:18px;font-size:24px;letter-spacing:.38em;color:var(--ink-faint)}
+.shot{position:absolute;left:96px;right:96px;top:376px;display:grid;grid-template-columns:auto 1fr;column-gap:22px;
+  padding:22px 26px;background:rgba(35,28,23,.045);border-radius:4px}
+.shot .lb{writing-mode:vertical-rl;font-size:20px;letter-spacing:.3em;color:var(--paper);background:var(--ink-soft);padding:10px 6px;border-radius:3px;align-self:start}
+.shot p{font-size:24px;line-height:1.72;color:var(--ink-soft);letter-spacing:.02em}
+.vo{position:absolute;left:150px;top:546px;width:700px}
+.vo .st{margin-bottom:26px}
+.vo p{font-size:34px;line-height:1.82;letter-spacing:.06em;color:var(--ink)}
+.vo .hl{color:var(--red);font-weight:600}
+.vo .poemline{color:#8A5A2B}
+.vo .hang{text-indent:-.5em}
+.vo .lab{position:absolute;left:-54px;top:6px;writing-mode:vertical-rl;font-size:19px;letter-spacing:.4em;color:var(--ink-faint)}
+.side-art{position:absolute;right:-40px;bottom:-20px;width:480px;height:900px;z-index:0}
+.note{position:absolute;left:96px;right:210px;bottom:118px;font-size:19px;line-height:1.7;color:var(--ink-faint);letter-spacing:.04em}
+
+/* ---------- 尾页 ---------- */
+.end .vo{left:160px;top:330px;width:800px}
+.end .vo p{font-size:38px;line-height:1.8}
+.end .vo p{color:rgba(246,235,221,.92)}
+.end .vo .hl{color:var(--gold-soft)}
+.end .mark{position:absolute;left:84px;top:120px;font-family:'Brush';font-size:150px;line-height:1;color:var(--gold-soft)}
+.end .meta{position:absolute;left:270px;top:146px;border-left:2px solid var(--gold-soft);padding-left:30px}
+.end .meta h2{font-size:56px;font-weight:900;letter-spacing:.14em;line-height:1.1;color:#F6EBDD}
+.end .meta .season{margin-top:14px;font-size:22px;letter-spacing:.38em;color:var(--gold-soft)}
+.end .shot{top:auto;bottom:520px;display:none}
+.slate{position:absolute;left:96px;right:96px;bottom:96px;text-align:center}
+.slate .big{font-family:'Brush';font-size:150px;line-height:1;color:#F6EBDD;letter-spacing:.06em;text-shadow:0 6px 30px rgba(20,0,0,.4)}
+.slate .brand{margin-top:26px;font-size:34px;letter-spacing:.6em;color:var(--gold-soft);font-weight:600;display:inline-flex;align-items:center;gap:22px}
+.slate .brand .seal{background:#F1E4D0;color:var(--red);width:52px;height:52px;font-size:26px;writing-mode:vertical-rl;letter-spacing:0;padding-left:2px}
+.slate .call{margin-top:22px;font-size:24px;letter-spacing:.3em;color:rgba(246,235,221,.7)}
+</style>
+</head>
+<body>
+
+<!-- 共享图形 -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <radialGradient id="gSeed" cx="36%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#FF8C8C"/>
+      <stop offset=".35" stop-color="#E0283A"/>
+      <stop offset=".8" stop-color="#9C0F22"/>
+      <stop offset="1" stop-color="#6A0816"/>
+    </radialGradient>
+    <radialGradient id="gFruit" cx="34%" cy="34%" r="80%">
+      <stop offset="0" stop-color="#E6584A"/>
+      <stop offset=".45" stop-color="#BE2A22"/>
+      <stop offset="1" stop-color="#6A1012"/>
+    </radialGradient>
+    <linearGradient id="gCrown" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7A1A14"/>
+      <stop offset="1" stop-color="#A3261E"/>
+    </linearGradient>
+    <radialGradient id="gPetal" cx="50%" cy="70%" r="70%">
+      <stop offset="0" stop-color="#F0603A"/>
+      <stop offset="1" stop-color="#C32A22"/>
+    </radialGradient>
+    <linearGradient id="gLeaf" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3F4A27"/>
+      <stop offset="1" stop-color="#6C7A45"/>
+    </linearGradient>
+
+    <symbol id="seed" viewBox="0 0 40 48">
+      <path d="M20 2C31 6 38 17 36 30C34 42 27 46 20 46C13 46 6 42 4 30C2 17 9 6 20 2Z" fill="url(#gSeed)"/>
+      <ellipse cx="14" cy="17" rx="4" ry="8" fill="#fff" opacity=".55" transform="rotate(-18 14 17)"/>
+      <circle cx="25" cy="34" r="2" fill="#fff" opacity=".18"/>
+    </symbol>
+
+    <symbol id="fruit" viewBox="0 0 200 220">
+      <path d="M100 42C152 40 190 80 189 130C188 180 148 214 100 213C52 214 12 180 11 130C10 80 48 40 100 42Z" fill="url(#gFruit)"/>
+      <path d="M74 54L68 22L84 36L90 6L100 30L110 6L116 36L132 22L126 54C116 47 84 47 74 54Z" fill="url(#gCrown)"/>
+      <ellipse cx="62" cy="104" rx="16" ry="30" fill="#fff" opacity=".22" transform="rotate(24 62 104)"/>
+      <path d="M100 42C152 40 190 80 189 130C188 180 148 214 100 213C52 214 12 180 11 130C10 80 48 40 100 42Z" fill="none" stroke="#4A0A0C" stroke-opacity=".35" stroke-width="2"/>
+    </symbol>
+
+    <symbol id="flower" viewBox="0 0 120 130">
+      <path d="M22 58C10 34 30 8 50 20C58 4 82 6 86 22C106 14 116 40 98 58C80 70 40 70 22 58Z" fill="url(#gPetal)"/>
+      <path d="M34 50C42 40 46 30 50 22M62 54C64 40 68 28 74 20M84 52C88 44 94 38 100 36" stroke="#9E1E18" stroke-width="2" fill="none" opacity=".5"/>
+      <path d="M38 60L28 46L44 54L52 38L60 54L68 38L76 54L92 46L82 60C80 88 74 108 60 118C46 108 40 88 38 60Z" fill="#B3271F"/>
+      <path d="M60 64C58 82 58 100 60 116" stroke="#7E1712" stroke-width="2" opacity=".5" fill="none"/>
+    </symbol>
+
+    <symbol id="leaf" viewBox="0 -12 80 24">
+      <path d="M0 0C18 -10 52 -11 80 0C52 11 18 10 0 0Z" fill="url(#gLeaf)"/>
+      <path d="M2 0L76 0" stroke="#2E3720" stroke-width="1.2" opacity=".6"/>
+    </symbol>
+
+    <!-- 金线版石榴（用于深红底） -->
+    <symbol id="fruitLine" viewBox="0 0 200 220">
+      <path d="M100 42C152 40 190 80 189 130C188 180 148 214 100 213C52 214 12 180 11 130C10 80 48 40 100 42Z" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M74 54L68 22L84 36L90 6L100 30L110 6L116 36L132 22L126 54" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ============ 01 封面 ============ -->
+<section class="page crimson cover" id="p1">
+  <svg class="art" viewBox="0 0 1080 640">
+    <!-- 金线石榴轮廓 -->
+    <use href="#fruitLine" x="90" y="70" width="420" height="462" style="color:#D9BD8C" opacity=".35"/>
+    <!-- 剖开的籽，散落 -->
+    <g id="coverSeeds"></g>
+    <g>
+      <use href="#seed" x="520" y="470" width="24" height="29" transform="rotate(50 532 484)" opacity=".85"/>
+      <use href="#seed" x="590" y="430" width="18" height="22" transform="rotate(-30 599 441)" opacity=".7"/>
+      <use href="#seed" x="660" y="505" width="20" height="24" transform="rotate(12 670 517)" opacity=".75"/>
+      <use href="#seed" x="740" y="465" width="14" height="17" transform="rotate(-50 747 473)" opacity=".5"/>
+    </g>
+  </svg>
+
+  <div class="poem">
+    <span>五月榴花照眼明</span><br>
+    <span>枝间时见子初成</span><br>
+    <span>可怜此地无车马</span><br>
+    <span>颠倒青苔落绛英</span><br>
+    <span class="by">唐 · 韩愈《榴花》</span>
+  </div>
+  <div class="sub">一颗石榴里的村庄</div>
+  <div class="title">照眼明</div>
+  <div class="seal-lg">塔山</div>
+
+  <div class="bottom">
+    <div class="k">塔山石榴 · 文旅宣传片<small>文 案 创 意 策 划</small></div>
+    <div class="tag">文化旅游<br>乡村复兴</div>
+  </div>
+</section>
+
+<!-- ============ 02 创意策划 ============ -->
+<section class="page cream" id="p2">
+  <div class="topbar"><span>塔山石榴｜宣传片文案</span><span class="no"><b>02</b> / 09</span></div>
+  <div class="head"><h2>创意策划</h2><span class="en">CREATIVE CONCEPT</span></div>
+  <div class="plan">
+    <div class="sec"><div class="num">一</div><div>
+      <h3>核心创意<em>反写一句唐诗</em></h3>
+      <p>一千二百年前，韩愈写榴花：<b>“可怜此地无车马”</b>——花开得再好，也无人来看。整部片子只做一件事：<span class="r">让车马回来。</span>从“无车马”到“车马来”，就是塔山乡村复兴的全部故事。</p>
+    </div></div>
+    <div class="sec"><div class="num">二</div><div>
+      <h3>情感母题<em>千籽同房</em></h3>
+      <p>石榴最动人的不是红，是籽——千百粒挤在一间屋里，谁也不离开谁。<b>一颗石榴，就是一座村庄；</b>乡村复兴，就是让散落在外的籽，重新回到屋里。</p>
+    </div></div>
+    <div class="sec"><div class="num">三</div><div>
+      <h3>叙事时间<em>一个花果季</em></h3>
+      <p>从五月榴花“照眼明”，到九月石榴“开口笑”。<b>一季花果，写尽一村兴衰</b>，首尾自然呼应。</p>
+    </div></div>
+    <div class="sec"><div class="num">四</div><div>
+      <h3>视听基调<em>克制 · 留白 · 慢</em></h3>
+      <dl class="spec">
+        <dt>色</dt><dd>榴花红 · 石灰岩灰 · 晨雾白</dd>
+        <dt>声</dt><dd>风过榴林、剥开石榴的脆响、一句淮北乡音</dd>
+        <dt>人</dt><dd>不请演员，用本村老人与返乡青年本色出镜</dd>
+        <dt>旁白</dt><dd>低沉温厚，像长辈讲往事，不煽情</dd>
+        <dt>规格</dt><dd>主片约 3 分钟 ＋ 30 秒短视频版</dd>
+      </dl>
+    </div></div>
+  </div>
+  <div class="foot"><span class="seal sm">塔山</span>一颗石榴里的村庄</div>
+</section>
+
+<!-- ============ 03 叙事结构 ============ -->
+<section class="page cream" id="p3">
+  <div class="topbar"><span>塔山石榴｜宣传片文案</span><span class="no"><b>03</b> / 09</span></div>
+  <div class="head"><h2>叙事结构</h2><span class="en">五 月 → 九 月 · 一 季 一 生</span></div>
+  <div class="timeline">
+    <div class="tl-row"><div class="ch">序</div><div><div class="ttl">照眼明<span>五月 · 花</span></div><div class="ds">花开无人看，一句唐诗起笔</div></div>
+      <div class="mood">静<span class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></span></div></div>
+    <div class="tl-row"><div class="ch">壹</div><div><div class="ttl">老　树<span>历史 · 根</span></div><div class="ds">明清古树还在，人却走散了</div></div>
+      <div class="mood">沉<span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div></div>
+    <div class="tl-row"><div class="ch">贰</div><div><div class="ttl">车　马<span>路 · 线</span></div><div class="ds">一条天路，把散落的籽重新穿起</div></div>
+      <div class="mood">起<span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div></div>
+    <div class="tl-row"><div class="ch">叁</div><div><div class="ttl">归　人<span>人 · 灯</span></div><div class="ds">游人来了，离开的孩子也回来了</div></div>
+      <div class="mood">暖<span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div></div>
+    <div class="tl-row"><div class="ch">肆</div><div><div class="ttl">开口笑<span>九月 · 果</span></div><div class="ds">千籽同房，谁也不离开谁</div></div>
+      <div class="mood">满<span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div></div>
+    <div class="tl-row" style="border-bottom:0"><div class="ch">尾</div><div><div class="ttl">一籽一乡<span>夜 · 家</span></div><div class="ds">乡村振兴很大，在塔山它很小</div></div>
+      <div class="mood">余韵<span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div></div>
+  </div>
+  <div class="quotes">
+    <div class="lbl">金句 · 可作海报与短视频标题</div>
+    <p>一颗石榴，就是一座村庄。<br>韩愈说，此地无车马。今天，车马来了。<br>人在，村就在；灯亮着，家就在。<br>来塔山，剥开一颗石榴，找回一个故乡。</p>
+  </div>
+  <div class="foot"><span class="seal sm">塔山</span>一颗石榴里的村庄</div>
+</section>
+
+<!-- ============ 04 序 ============ -->
+<section class="page cream chap" id="p4">
+  <div class="topbar"><span>塔山石榴｜宣传片文案</span><span class="no"><b>04</b> / 09</span></div>
+  <div class="mark">序</div>
+  <div class="meta"><h2>照眼明</h2><div class="season">五月 · 花开无人看</div></div>
+  <div class="shot"><span class="lb">画面</span><p>五月清晨，雾从石灰岩山脊上慢慢退去。一枝榴花在镜头前由虚到实，花瓣上挂着露水。四下无人，只有风声。</p></div>
+  <div class="vo">
+    <span class="lab">旁白</span>
+    <div class="st"><p>一千二百年前，韩愈写榴花——</p><p class="poemline hang">“五月榴花照眼明，枝间时见子初成。”</p></div>
+    <div class="st"><p>后面，他还写了一句：</p><p class="poemline hang">“可怜此地无车马。”</p></div>
+    <div class="st"><p>在塔山，有很长一段日子，</p><p class="hl">这句诗，是真的。</p></div>
+  </div>
+  <svg class="side-art" viewBox="0 0 480 900">
+    <path d="M520 140C430 200 380 300 360 420C345 520 330 600 290 700" stroke="#3A2A1F" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M372 360C330 380 300 410 280 450" stroke="#3A2A1F" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <use href="#leaf" x="0" y="0" width="120" height="36" transform="translate(372 250) rotate(-160)"/>
+    <use href="#leaf" x="0" y="0" width="100" height="30" transform="translate(380 300) rotate(-200)"/>
+    <use href="#leaf" x="0" y="0" width="110" height="33" transform="translate(356 470) rotate(150)"/>
+    <use href="#leaf" x="0" y="0" width="96" height="29" transform="translate(350 520) rotate(20)"/>
+    <use href="#leaf" x="0" y="0" width="90" height="27" transform="translate(320 610) rotate(160)"/>
+    <use href="#flower" x="216" y="430" width="110" height="119" transform="rotate(-25 271 489)"/>
+    <use href="#flower" x="250" y="660" width="90" height="98" transform="rotate(12 295 709)"/>
+    <use href="#flower" x="400" y="160" width="70" height="76" transform="rotate(-50 435 198)"/>
+  </svg>
+  <div class="foot"><span class="seal sm">塔山</span>一颗石榴里的村庄</div>
+</section>
+
+<!-- ============ 05 壹 老树 ============ -->
+<section class="page cream chap" id="p5">
+  <div class="topbar"><span>塔山石榴｜宣传片文案</span><span class="no"><b>05</b> / 09</span></div>
+  <div class="mark">壹</div>
+  <div class="meta"><h2>老　树</h2><div class="season">历史 · 根还在，人走散</div></div>
+  <div class="shot"><span class="lb">画面</span><p>明清古榴树特写，树皮拧成一股一股的绳；一双老人的手抚过树干，两种纹理叠化在一起。远处，一扇落了锁的木门。</p></div>
+  <div class="vo">
+    <span class="lab">旁白</span>
+    <div class="st"><p>山是石头山，土薄，风硬。</p><p>偏偏是石榴，在这里扎下了根。</p></div>
+    <div class="st"><p>明清的老树，至今还站在坡上，</p><p>树皮一股一股拧着，像老人攥紧的手。</p><p>它们见过送往京城的贡果，</p><p>也见过空下来的院子、落了锁的门。</p></div>
+    <div class="st"><p>一棵树，能活几百年；</p><p>一个村子，却可能在一代人手里，</p><p class="hl">走散。</p></div>
+  </div>
+  <svg class="side-art" viewBox="0 0 480 900" style="opacity:.9">
+    <path d="M500 60C440 160 470 260 420 360C380 440 400 520 360 600C330 660 300 720 310 820" stroke="#3A2A1F" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <path d="M430 330C400 320 370 330 340 360M380 560C350 560 330 580 310 610" stroke="#3A2A1F" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <use href="#leaf" x="0" y="0" width="100" height="30" transform="translate(440 200) rotate(-150)"/>
+    <use href="#leaf" x="0" y="0" width="90" height="27" transform="translate(340 362) rotate(170)"/>
+    <use href="#leaf" x="0" y="0" width="100" height="30" transform="translate(312 610) rotate(140)"/>
+    <use href="#leaf" x="0" y="0" width="80" height="24" transform="translate(372 470) rotate(10)"/>
+  </svg>
+  <div class="note">※ 素材依据：据《烈山区志》，烈山镇种植石榴历史悠久，清代有以石榴进贡朝廷的记载；今存明清古石榴园千余亩、百年以上古树八百余株。成片前请与当地文旅部门核实。</div>
+  <div class="foot" style="display:none"></div>
+</section>
+
+<!-- ============ 06 贰 车马 ============ -->
+<section class="page cream chap" id="p6">
+  <div class="topbar"><span>塔山石榴｜宣传片文案</span><span class="no"><b>06</b> / 09</span></div>
+  <div class="mark">贰</div>
+  <div class="meta"><h2>车　马</h2><div class="season">路 · 把散落的籽穿起来</div></div>
+  <div class="shot"><span class="lb">画面</span><p>老照片质感：土路、竹筐、落了一地的果子。转场——航拍龙脊天路蜿蜒穿过万亩榴林，暮色里车灯一盏一盏亮起。</p></div>
+  <div class="vo">
+    <span class="lab">旁白</span>
+    <div class="st"><p>那些年，果子熟了运不出去，</p><p>就落在地里，红了一地，没人捡。</p><p>石榴开了口，</p><p>像想说点什么，又咽了回去。</p></div>
+    <div class="st"><p>后来，路修进了山。</p><p>龙脊天路一弯一弯，绕过榴林，</p><p>像一根红线，把散落的籽，</p><p>一颗一颗，重新穿起来。</p></div>
+    <div class="st"><p>韩愈说，此地无车马。</p><p class="hl">今天，车马来了。</p></div>
+  </div>
+  <svg class="side-art" viewBox="0 0 480 900">
+    <path d="M470 40C330 120 470 250 330 340C200 420 420 520 300 620C220 690 300 780 260 900" stroke="#A8201C" stroke-width="3" fill="none" stroke-dasharray="2 12" stroke-linecap="round" opacity=".7"/>
+    <use href="#seed" x="452" y="20" width="30" height="36"/>
+    <use href="#seed" x="372" y="150" width="26" height="31" transform="rotate(20 385 165)"/>
+    <use href="#seed" x="318" y="322" width="32" height="38" transform="rotate(-14 334 341)"/>
+    <use href="#seed" x="352" y="470" width="28" height="34" transform="rotate(30 366 487)"/>
+    <use href="#seed" x="284" y="602" width="34" height="41" transform="rotate(-8 301 622)"/>
+    <use href="#seed" x="268" y="750" width="26" height="31" transform="rotate(16 281 765)"/>
+  </svg>
+  <div class="foot"><span class="seal sm">塔山</span>一颗石榴里的村庄</div>
+</section>
+
+<!-- ============ 07 叁 归人 ============ -->
+<section class="page cream chap" id="p7">
+  <div class="topbar"><span>塔山石榴｜宣传片文案</span><span class="no"><b>07</b> / 09</span></div>
+  <div class="mark">叁</div>
+  <div class="meta"><h2>归　人</h2><div class="season">人 · 离开的孩子回来了</div></div>
+  <div class="shot"><span class="lb">画面</span><p>老屋改成的民宿，推开木窗，正对一棵石榴树；姑娘对着手机剥开一颗石榴；天刚亮，老人扛着锄头上山。</p></div>
+  <div class="vo">
+    <span class="lab">旁白</span>
+    <div class="st"><p>来的，不只是游人，</p><p>还有当年离开的孩子。</p></div>
+    <div class="st"><p>他把老屋改成民宿，</p><p>推开窗，就是爷爷种的那棵石榴树。</p><p>她架起手机，对着镜头剥开一颗石榴，</p><p>说：这是我们塔山的。</p></div>
+    <div class="st"><p>老人不懂什么叫直播，</p><p>只是每天清早，照旧上山，</p><p>给树培一捧土——</p><p class="hl">这一捧土，他培了六十年。</p></div>
+  </div>
+  <svg class="side-art" viewBox="0 0 480 900">
+    <path d="M520 110C440 150 400 220 390 300" stroke="#3A2A1F" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M400 250C380 230 350 225 320 230" stroke="#3A2A1F" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <use href="#leaf" x="0" y="0" width="100" height="30" transform="translate(440 150) rotate(-160)"/>
+    <use href="#leaf" x="0" y="0" width="90" height="27" transform="translate(320 232) rotate(-200)"/>
+    <use href="#leaf" x="0" y="0" width="90" height="27" transform="translate(394 290) rotate(110)"/>
+    <use href="#fruit" x="318" y="292" width="140" height="154"/>
+  </svg>
+  <div class="foot"><span class="seal sm">塔山</span>一颗石榴里的村庄</div>
+</section>
+
+<!-- ============ 08 肆 开口笑 ============ -->
+<section class="page cream chap" id="p8">
+  <div class="topbar"><span>塔山石榴｜宣传片文案</span><span class="no"><b>08</b> / 09</span></div>
+  <div class="mark">肆</div>
+  <div class="meta"><h2>开口笑</h2><div class="season">九月 · 千籽同房</div></div>
+  <div class="shot"><span class="lb">画面</span><p>九月，满山挂果。熟透的石榴在枝头自己裂开；慢镜头，一双手掰开石榴，籽粒在逆光里像一捧红宝石。</p></div>
+  <div class="vo">
+    <span class="lab">旁白</span>
+    <div class="st"><p>九月，石榴熟透了，会自己裂开。</p><p>老辈人管这叫——“开口笑”。</p></div>
+    <div class="st"><p>剥开一颗，</p><p>千百粒籽挤在一间屋里，</p><p>谁也不离开谁。</p></div>
+    <div class="st"><p>这多像一个村子。</p><p class="hl">人在，村就在；</p><p class="hl">灯亮着，家就在。</p></div>
+  </div>
+  <svg class="side-art" viewBox="0 0 480 900">
+    <defs>
+      <radialGradient id="gPith" cx="45%" cy="40%" r="70%"><stop offset="0" stop-color="#F7E6D2"/><stop offset="1" stop-color="#E9C9AE"/></radialGradient>
+    </defs>
+    <circle cx="300" cy="640" r="176" fill="url(#gFruit)"/>
+    <circle cx="300" cy="640" r="176" fill="none" stroke="#4A0A0C" stroke-opacity=".35" stroke-width="2"/>
+    <circle cx="300" cy="640" r="158" fill="url(#gPith)"/>
+    <g id="halfSeeds"></g>
+    
+    <use href="#seed" x="120" y="860" width="22" height="26" transform="rotate(50 131 873)" opacity=".85"/>
+    <use href="#seed" x="70" y="800" width="18" height="22" transform="rotate(-20 79 811)" opacity=".7"/>
+  </svg>
+  <div class="foot"><span class="seal sm">塔山</span>一颗石榴里的村庄</div>
+</section>
+
+<!-- ============ 09 尾 ============ -->
+<section class="page crimson end" id="p9">
+  <div class="topbar" style="color:rgba(217,189,140,.75)"><span>塔山石榴｜宣传片文案</span><span class="no"><b style="color:#F1E4D0">09</b> / 09</span></div>
+  <div class="mark">尾</div>
+  <div class="meta"><h2>一籽一乡</h2><div class="season">夜 · 灯一盏盏亮起</div></div>
+  <div class="vo">
+    <div class="st"><p>有人说，乡村振兴是一件很大的事。</p><p>在塔山，它很小——</p></div>
+    <div class="st"><p>小到一粒籽，</p><p>一盏重新亮起的灯，</p><p class="hl">一个终于回家的人。</p></div>
+  </div>
+  <svg class="village" viewBox="0 0 1080 740" style="position:absolute;left:0;top:700px;width:1080px;height:740px;z-index:0">
+    <defs>
+      <radialGradient id="gLamp"><stop offset="0" stop-color="#FFE3A6" stop-opacity=".95"/><stop offset=".35" stop-color="#F2B866" stop-opacity=".5"/><stop offset="1" stop-color="#F2B866" stop-opacity="0"/></radialGradient>
+    </defs>
+    <path d="M0 150C120 90 220 70 330 110C430 146 520 60 640 50C760 40 860 120 1080 80L1080 740L0 740Z" fill="#5A0B0E" opacity=".45"/>
+    <path d="M0 230C140 180 260 170 380 200C500 230 600 150 740 150C870 150 960 210 1080 190L1080 740L0 740Z" fill="#4A080B" opacity=".6"/>
+    <g id="lamps"></g>
+  </svg>
+  <div class="slate">
+    <div class="big">一籽一乡</div>
+    <div class="brand"><span class="seal">塔山</span>塔山石榴 · 红红火火</div>
+    <div class="call">来塔山，剥开一颗石榴，找回一个故乡</div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var NS='http://www.w3.org/2000/svg';
+  function rng(seed){return function(){seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};}
+  function seeds(gid,cx,cy,R,step,smin,smax,seed,fade){
+    var g=document.getElementById(gid), r=rng(seed), rows=Math.ceil(R/step)+1;
+    for(var i=-rows;i<=rows;i++){
+      for(var j=-rows;j<=rows;j++){
+        var x=cx+j*step+(i%2?step/2:0)+(r()-.5)*step*.3, y=cy+i*step*.88+(r()-.5)*step*.3;
+        var d=Math.hypot(x-cx,y-cy); if(d>R) continue;
+        var k=d/R, sz=smin+r()*(smax-smin);
+        if(fade) sz*=1-.35*k;
+        var ang=Math.atan2(y-cy,x-cx)*180/Math.PI+90+(r()-.5)*50;
+        var u=document.createElementNS(NS,'use');
+        u.setAttribute('href','#seed');
+        u.setAttribute('x',(x-sz/2).toFixed(1)); u.setAttribute('y',(y-sz*.6).toFixed(1));
+        u.setAttribute('width',sz.toFixed(1)); u.setAttribute('height',(sz*1.2).toFixed(1));
+        u.setAttribute('transform','rotate('+ang.toFixed(1)+' '+x.toFixed(1)+' '+y.toFixed(1)+')');
+        if(fade) u.setAttribute('opacity',(1-.45*k*k).toFixed(2));
+        g.appendChild(u);
+      }
+    }
+  }
+  seeds('coverSeeds',300,342,158,31,26,34,11,true);
+  seeds('halfSeeds',300,640,134,30,25,31,23,false);
+  var g=document.getElementById('lamps'), r=rng(5);
+  for(var n=0;n<28;n++){
+    var x=40+r()*1000, base=x<380?200+(x/380)*10:(x<740?210-(x-380)/360*50:150+(x-740)/340*40);
+    var y=base+14+r()*90, s=3+r()*3.5;
+    var halo=document.createElementNS(NS,'circle'); halo.setAttribute('cx',x);halo.setAttribute('cy',y);halo.setAttribute('r',s*3.6);halo.setAttribute('fill','url(#gLamp)');
+    var core=document.createElementNS(NS,'circle'); core.setAttribute('cx',x);core.setAttribute('cy',y);core.setAttribute('r',s*.55);core.setAttribute('fill','#FFF1CF');
+    g.appendChild(halo); g.appendChild(core);
+  }
+})();
+</script>
+</body>
+</html>
