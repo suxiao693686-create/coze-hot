@@ -109,7 +109,8 @@ window.PROFILE = {
  * ------------------------------------------------------------- */
 window.MODULES = [
   { id: 'ppt', name: 'PPT 设计', en: 'presentation', desc: '用一份 PPT 讲清一个品牌、一个项目、一个想法。点开可以全屏逐页翻阅。' },
-  { id: 'text', name: '文字', en: 'copywriting', desc: '宣传片文案、品牌故事和公众号长文。点开可以逐页翻阅，长文可以从头读到尾。' }
+  { id: 'text', name: '文字', en: 'copywriting', desc: '宣传片文案、品牌故事和公众号长文。点开可以逐页翻阅，长文可以从头读到尾。' },
+  { id: 'visual', name: '视觉设计', en: 'visual design', desc: 'AI 视频、海报、折页、详情页、网页和 H5 小游戏。视频可以直接播放，H5 可以在手机框里直接玩。' }
 ];
 
 /* -------------------------------------------------------------
@@ -217,5 +218,126 @@ window.WORKS = [
     ],
     cover: 'works/jiehou/cover.webp',
     article: { dir: 'works/jiehou/', count: 7, segment: 2400, width: 1080, height: 14514 }
+  },
+
+  /* ---------- 视觉设计 ---------- */
+  {
+    id: 'xunwei',
+    module: 'visual',
+    title: '寻味徽州',
+    subtitle: '黄山徽州文旅 AI 宣传 MV',
+    year: '2025',
+    role: '创意 · AI 视频制作',
+    tags: ['AI 视频', '文旅宣传', '徽州'],
+    summary: '一分钟的徽州文旅宣传 MV，画面用 AI 生成，油画质感的白墙黛瓦、茶山炊烟和一桌徽菜，跟着一句「我寻味徽州，醉在梦里头」，把一口家乡味写成乡愁。',
+    case: [
+      { k: '叙事', v: '从「寻味徽州」的片名开场，到焦香落胃的一盘徽菜，再到水乡、茶园、炊烟和一碗热汤，最后落在家门口那一口最对的味道。' },
+      { k: '画面', v: '统一成厚涂油画的质感，暖黄的晨昏光线配白墙黛瓦，人物都是吃饭、采茶、写字这样日常的动作。' }
+    ],
+    video: { src: 'works/xunwei/xunwei.mp4', poster: 'works/xunwei/poster.webp', ratio: 16 / 9 }
+  },
+  {
+    id: 'wenyang',
+    module: 'visual',
+    title: '一纹一世界',
+    subtitle: '中国传统民族纹样展 · 三折页与展览海报',
+    year: '2025',
+    role: '平面设计',
+    tags: ['三折页', '展览海报', '非遗纹样'],
+    summary: '为「中国传统民族纹样展」做的一套宣传物料：两款三折页「一纹一世界」和「民族纹样之旅」，配上样机效果图，再加一张横版展览海报「纹以载道，民族传承」。',
+    case: [
+      { k: '一纹一世界', v: '雾蓝底色，一枚菱形纹样放在正中，竖排「体现深厚的民族风韵，传统艺术之美」，背面印着展览时间、地点和扫码详情。' },
+      { k: '民族纹样之旅', v: '深蓝配绛红，封面是一个毛笔圈起来的「纹」字，内页按 DAY 1 到 DAY 3 排出看展路线和各民族的纹样。' },
+      { k: '展览海报', v: '左侧墨绿竖条写「纹以载道，民族传承」，右侧用一件华丽的传统饰物做主图，标题是「探寻纹样瑰宝，感受民族魅力」。' }
+    ],
+    deck: { dir: 'works/wenyang/', count: 7, ratio: 1.4992 }
+  },
+  {
+    id: 'apple',
+    module: 'visual',
+    title: '一身纯白，自有声色。',
+    subtitle: 'AirPods Pro · MacBook Air 产品概念海报',
+    role: '文案 · 视觉',
+    tags: ['产品海报', '广告文案', '概念稿'],
+    summary: '两张苹果产品的概念海报。耳机被放大成山顶上的一座白色地标，有人坐在上面拉大提琴：「一身纯白，自有声色。」MacBook Air 的机身变成一条通往远方的山路：「轻装，也能走远。」用夸张的尺寸对比，把产品卖点变成一个画面。',
+    deck: { dir: 'works/apple/', count: 2, ratio: 0.75 }
+  },
+  {
+    id: 'gongyi',
+    module: 'visual',
+    title: '公益广告海报',
+    subtitle: '文物保护「印迹模糊，守护重现」· 食品安全「把好入口关」',
+    role: '创意 · 文案 · 设计',
+    tags: ['公益广告', '文物保护', '食品安全'],
+    summary: '两张公益海报。文物保护那张，一支毛刷正扫开斑驳的朱红印迹：「印迹模糊，守护重现，让文化记忆不再褪色。」食品安全那张，两根筷子立成一道关口，横幅写着「溯源 · 检测 · 监管」，米粒排着队通过：「每一口，都要过安全关。」',
+    deck: { dir: 'works/gongyi/', count: 2, ratio: 1.4133 }
+  },
+  {
+    id: 'yuting',
+    module: 'visual',
+    title: '由你选择，进球每一刻',
+    subtitle: '学院奖命题海报 · 紫竹药业 毓婷',
+    role: '创意 · 设计',
+    tags: ['学院奖', '命题海报', '女性健康'],
+    summary: '学院奖的命题作品。用女生打篮球的剪影，把药片画成篮球，配上「由你选择，进球每一刻」和品牌口号「有备，有毓婷」，把一个不太好开口的话题，换成女性自己掌握主动权的运动画面。',
+    deck: { dir: 'works/yuting/', count: 2, ratio: 0.7073 }
+  },
+  {
+    id: 'hbn',
+    module: 'visual',
+    title: '贵妃焕新颜',
+    subtitle: 'HBN × 古风互动 H5 小游戏',
+    role: '策划 · 文案 · 插画',
+    tags: ['H5', '游戏化营销', '国潮'],
+    summary: '子时熬夜吃荔枝的贵妃，第二天要面圣。玩家要在铅粉、普通护肤水和 HBN 之间替她挑一样焕颜之物，选错了会翻车，选对了「此乃神颜」。用错误选项做对比，把产品功效讲成一个小故事，结尾一键跳转购买。',
+    cover: 'works/hbn/cover.webp',
+    play: { src: '../hbn-h5/' },
+    images: ['works/hbn/pic.webp'],
+    link: 'https://suxiao693686-create.github.io/coze-hot/hbn-h5/'
+  },
+  {
+    id: 'youzhisan-web',
+    module: 'visual',
+    title: '油纸伞',
+    subtitle: '非遗文化宣传网页 · 原创 IP「伞小桐」',
+    role: '网页设计 · 视觉 · IP 设计',
+    tags: ['网页设计', '非遗', 'IP 形象'],
+    coverPos: '40% 50%',
+    summary: '「一竹一纸一桐油，半生半世半浮华。」五个页面的非遗宣传网站：讲油纸伞的起源与寓意、制作流程、保护与创新，并设计了原创 IP「伞小桐」和一套 Q 版表情包。',
+    cover: 'works/youzhisan-web/cover.webp',
+    article: { dir: 'works/youzhisan-web/', segment: 2400, parts: [
+      { name: '首页', prefix: 'long-1-', count: 1, width: 1366, height: 884 },
+      { name: '介绍', prefix: 'long-2-', count: 3, width: 1366, height: 5425 },
+      { name: '制作流程', prefix: 'long-3-', count: 3, width: 1366, height: 5572 },
+      { name: '保护创新', prefix: 'long-4-', count: 3, width: 1366, height: 5787 },
+      { name: 'IP 形象', prefix: 'long-5-', count: 2, width: 1366, height: 3381 }
+    ] },
+    link: 'https://suxiao693686-create.github.io/coze-hot/youzhisan/',
+    linkText: '打开网站'
+  },
+  {
+    id: 'infovis',
+    module: 'visual',
+    title: '信息可视化',
+    subtitle: '三书六礼 · 美国南北战争',
+    role: '信息设计',
+    tags: ['信息图', '数据可视化', '长图'],
+    summary: '两张信息长图。「三书六礼」用古画人物和流程图讲清古代婚礼的礼节、历代婚服和各地婚俗；「美国南北战争」用时间线、对比条形图、环形图和战役卡片，把一场战争的国力、伤亡和代价摊开来看。',
+    cover: 'works/infovis/cover.webp',
+    article: { dir: 'works/infovis/', segment: 2400, parts: [
+      { name: '三书六礼', prefix: 'long-1-', count: 2, width: 1280, height: 4535 },
+      { name: '美国南北战争', prefix: 'long-2-', count: 3, width: 1600, height: 6778 }
+    ] }
+  },
+  {
+    id: 'ysl',
+    module: 'visual',
+    title: '圣罗兰「小金条」',
+    subtitle: 'YSL THE SLIM 淘宝详情页',
+    role: '电商视觉 · 文案',
+    tags: ['电商详情页', '美妆', '品牌视觉'],
+    summary: '为 YSL 小金条口红做的淘宝详情页：黑金主视觉开场，依次讲「高定自成一格」的方管外形、1966 等四个色号、「柔滑上色，高定哑光」的质地，再用三步教你「用方寸，画出你的唇形」，最后是产品信息。',
+    cover: 'works/ysl/cover.webp',
+    article: { dir: 'works/ysl/', count: 3, segment: 2400, width: 750, height: 6167 }
   }
 ];

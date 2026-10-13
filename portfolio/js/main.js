@@ -451,7 +451,15 @@
     var d = w.deck;
     return d.dir + (thumb ? 'thumb-' : 'slide-') + pad(n, Math.max(2, String(d.count).length)) + '.' + (d.ext || 'webp');
   }
-  function coverOf(w) { return w.cover || (w.deck ? deckSrc(w, 1) : ''); }
+  function coverOf(w) { return w.cover || (w.video && w.video.poster) || (w.deck ? deckSrc(w, 1) : ''); }
+  // 长文可以是一张长图，也可以是几张长图（网页的几个页面）按顺序拼起来
+  function articleParts(w) {
+    var a = w.article;
+    if (a.parts) return a.parts;
+    return [{ name: '', prefix: 'long-', count: a.count, width: a.width, height: a.height }];
+  }
+  // 能不能把 H5 直接嵌在页面里玩：只在作品集自己的网站上（和游戏同一个域名）才嵌
+  var canEmbed = /github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
   function realWorks() {
     // 按模块顺序排，详情页的「上一件 / 下一件」也按这个顺序
     var order = MODULES.map(function (m) { return m.id; });
@@ -469,9 +477,9 @@
         '<div class="card__meta"><span class="card__no">No.' + no + (mod.name ? ' · ' + esc(mod.name) : '') + '</span><h3>' + esc(w.title) + '</h3><p>' + esc(w.note || '敬请期待') + '</p></div></article>';
     }
     var cover = coverOf(w);
-    var info = ['No.' + no, mod.name, w.year, w.deck ? w.deck.count + ' 页' : w.article ? '长文' : ''].filter(Boolean).map(esc).join(' · ');
+    var info = ['No.' + no, mod.name, w.year, w.deck ? w.deck.count + ' 页' : w.article ? (w.article.parts ? w.article.parts.length + ' 个部分' : '长文') : w.video ? '视频' : w.play ? '可试玩' : ''].filter(Boolean).map(esc).join(' · ');
     var pos = w.coverPos ? ' style="object-position:' + esc(w.coverPos) + '"' : '';
-    var cta = w.article ? '阅读全文 →' : w.deck ? (w.module === 'ppt' ? '翻阅 PPT →' : '逐页翻阅 →') : '打开看看 →';
+    var cta = w.video ? '播放视频 →' : w.play ? '打开试玩 →' : w.article ? '阅读全文 →' : w.deck ? (w.module === 'ppt' ? '翻阅 PPT →' : '逐页翻阅 →') : '打开看看 →';
     return '<article class="card rv" data-work="' + esc(w.id) + '" tabindex="0" role="button" aria-label="查看作品：' + esc(w.title) + '" style="--tilt:' + tilt + 'deg">' +
       '<div class="card__frame"><span class="tape tape--a"></span><span class="tape tape--b"></span>' +
       '<img class="card__img card__img--sketch" src="' + esc(cover) + '" alt="" loading="lazy"' + pos + '>' +
@@ -556,12 +564,31 @@
     }
 
     if (w.article) {
-      var a = w.article;
-      deck = '<div class="articlebox">' +
-        '<button class="articlebox__peek" data-read="' + esc(w.id) + '">' +
-        '<img src="' + esc(a.dir + 'long-01.webp') + '" alt="' + esc(w.title) + ' 开头">' +
+      var a = w.article, parts = articleParts(w), wide = parts[0].width >= 1200;
+      deck = '<div class="articlebox' + (wide ? ' articlebox--wide' : '') + '">' +
+        '<button class="articlebox__peek" data-read="' + esc(w.id) + '" data-part="0">' +
+        '<img src="' + esc(a.dir + parts[0].prefix + '01.webp') + '" alt="' + esc(w.title) + ' 开头">' +
         '<span><b>▶</b>阅读全文</span></button>' +
-        '<p class="deckbox__tip">像在手机上读公众号一样，从上往下滑就行</p></div>';
+        (parts.length > 1
+          ? '<p class="deckbox__tip">共 ' + parts.length + ' 个部分，点任意一个从那里开始看</p><div class="articlebox__parts">' +
+            parts.map(function (pt, k) { return '<button data-read="' + esc(w.id) + '" data-part="' + k + '"><i>' + pad(k + 1, 2) + '</i>' + esc(pt.name) + '</button>'; }).join('') + '</div>'
+          : '<p class="deckbox__tip">从上往下滑着读就行</p>') +
+        '</div>';
+    }
+
+    if (w.video) {
+      var v = w.video;
+      deck = '<div class="videobox"><video controls playsinline preload="none" src="' + esc(v.src) + '"' +
+        (v.poster ? ' poster="' + esc(v.poster) + '"' : '') + ' style="aspect-ratio:' + (v.ratio || 16 / 9) + '"></video></div>';
+    }
+
+    if (w.play) {
+      deck = canEmbed
+        ? '<div class="playbox"><div class="phone"><div class="phone__screen">' +
+          '<button class="phone__start" data-play="' + esc(w.play.src) + '" data-title="' + esc(w.title) + '">' +
+          '<img src="' + esc(coverOf(w)) + '" alt=""><span><b>▶</b>在这里试玩</span></button></div></div>' +
+          '<p class="deckbox__tip">直接在手机框里点着玩；想全屏玩，点下面的「在线体验」</p></div>'
+        : '';
     }
 
     sheetPaper.innerHTML =
@@ -584,7 +611,7 @@
         return '<li><span class="case__k"><i>0' + (i + 1) + '</i>' + esc(c.k) + '</span><p>' + esc(c.v) + '</p></li>';
       }).join('') + '</ol>' : '') +
       (w.link || w.qr ? '<footer class="sheet__foot">' +
-        (w.link ? '<a class="btn" href="' + esc(w.link) + '" target="_blank" rel="noopener">在线体验 →</a>' : '') +
+        (w.link ? '<a class="btn" href="' + esc(w.link) + '" target="_blank" rel="noopener">' + esc(w.linkText || '在线体验') + ' →</a>' : '') +
         (w.qr ? '<figure class="sheet__qr"><img src="' + esc(w.qr) + '" alt="' + esc(w.title) + ' 二维码"><figcaption>手机扫码体验</figcaption></figure>' : '') +
         '</footer>' : '') +
       (real.length > 1 ? '<nav class="sheet__nav"><button data-work="' + esc(prev.id) + '">← ' + esc(prev.title) + '</button><button data-work="' + esc(next.id) + '">' + esc(next.title) + ' →</button></nav>' : '');
@@ -600,6 +627,9 @@
     if (!sheet.classList.contains('is-open')) return;
     sheet.classList.remove('is-open');
     sheet.setAttribute('aria-hidden', 'true');
+    // 关掉详情时停掉正在放的视频和正在玩的游戏（游戏有背景音乐）
+    $$('video', sheetPaper).forEach(function (v) { v.pause(); });
+    $$('.phone__screen iframe', sheetPaper).forEach(function (f) { f.remove(); });
     document.body.classList.remove('in-sheet');
     hist('replaceState', current ? '#' + current : location.pathname + location.search);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
@@ -782,25 +812,36 @@
     }, { passive: true });
     readerEl.addEventListener('click', function (e) { if (e.target.closest('[data-reader-close]')) closeReader(); });
   }
-  function openReader(id) {
+  function openReader(id, part) {
     var w = WORKS.filter(function (x) { return x.id === id && x.article; })[0];
     if (!w) return;
     if (!readerEl) buildReader();
-    var a = w.article, seg = a.segment || 2400, html = '';
-    for (var n = 1; n <= a.count; n++) {
-      var h = n < a.count ? seg : a.height - seg * (a.count - 1);
-      html += '<img src="' + esc(a.dir + 'long-' + pad(n, 2) + '.webp') + '" width="' + a.width + '" height="' + h + '"' +
-        (n === 1 ? ' alt="' + esc(w.title) + '"' : ' alt=""') + (n > 2 ? ' loading="lazy"' : '') + '>';
-    }
+    var a = w.article, seg = a.segment || 2400, parts = articleParts(w), html = '', maxW = 0, shown = 0;
+    parts.forEach(function (pt, k) {
+      maxW = Math.max(maxW, pt.width);
+      if (parts.length > 1) html += '<h3 class="reader__part" data-k="' + k + '"><i>' + pad(k + 1, 2) + '</i>' + esc(pt.name) + '</h3>';
+      for (var n = 1; n <= pt.count; n++) {
+        var h = n < pt.count ? seg : pt.height - seg * (pt.count - 1);
+        html += '<img src="' + esc(a.dir + pt.prefix + pad(n, 2) + '.webp') + '" width="' + pt.width + '" height="' + h + '"' +
+          (shown === 0 ? ' alt="' + esc(w.title) + '"' : ' alt=""') + (shown > 1 ? ' loading="lazy"' : '') + '>';
+        shown++;
+      }
+    });
     readerFocus = document.activeElement;
     $('.deck__title', readerEl).textContent = w.title;
-    $('.reader__col', readerEl).innerHTML = html;
+    var col = $('.reader__col', readerEl);
+    col.innerHTML = html;
+    col.style.width = 'min(' + (a.column || (maxW >= 1200 ? 1000 : 540)) + 'px, 100%)'; // 网页截图、信息图用宽一点的栏
     var sc = $('.reader__scroll', readerEl);
     sc.scrollTop = 0;
     $('.deck__count i', readerEl).textContent = 0;
     $('.deck__progress i', readerEl).style.width = '0%';
     readerEl.classList.add('is-open');
     document.body.classList.add('in-deck');
+    if (part) { // 从某个部分开始看
+      var head = $('.reader__part[data-k="' + part + '"]', readerEl);
+      if (head) sc.scrollTop = head.offsetTop - 8;
+    }
     setTimeout(function () { sc.focus({ preventScroll: true }); }, 50);
   }
   function closeReader() {
@@ -917,7 +958,12 @@
       return;
     }
     var rd = t.closest('[data-read]');
-    if (rd) { openReader(rd.dataset.read); return; }
+    if (rd) { openReader(rd.dataset.read, +rd.dataset.part || 0); return; }
+    var pl = t.closest('[data-play]');
+    if (pl) {
+      pl.outerHTML = '<iframe src="' + esc(pl.dataset.play) + '" title="' + esc(pl.dataset.title) + '" allow="autoplay; fullscreen"></iframe>';
+      return;
+    }
     var dk = t.closest('[data-deck]');
     if (dk) { openDeck(dk.dataset.deck, +dk.dataset.page); return; }
     var w = t.closest('[data-work]');
