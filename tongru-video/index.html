@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>手法通乳操作视频</title>
+<style>
+:root{--bg:#0F1D1E;--fg:#E3EFED;--muted:#9AB2B0;--accent:#3CC2AF;--line:#25403F;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif}
+body{padding:env(safe-area-inset-top,0px) max(0px,env(safe-area-inset-right,0px)) 24px max(0px,env(safe-area-inset-left,0px))}
+.player{position:sticky;top:0;z-index:2;background:#000}
+video{width:100%;max-height:100vh;aspect-ratio:16/9;display:block;background:#000}
+.info{max-width:880px;margin:0 auto;padding:14px 16px 0}
+h1{font-size:20px;margin:0 0 4px;font-weight:700}
+.meta{font-size:13px;color:var(--muted)}
+.chapters{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:14px}
+.chapters button{font:inherit;text-align:left;display:flex;justify-content:space-between;gap:8px;align-items:baseline;cursor:pointer;
+  background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:14px}
+.chapters button.on{border-color:var(--accent);color:var(--accent);font-weight:700}
+.chapters time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.note{font-size:12px;color:var(--muted);margin-top:16px;line-height:1.6;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="player">
+  <video id="v" controls playsinline webkit-playsinline x5-playsinline preload="auto" poster="poster.jpg">
+    <source src="video.mp4" type="video/mp4">
+  </video>
+</div>
+<div class="info">
+  <h1>手法通乳标准操作演示</h1>
+  <div class="meta">中医特色操作技术 · 操作视频 2-1 · 5分32秒</div>
+  <div class="chapters" id="chapters"></div>
+  <p class="note">参考依据：T/CACM 1603—2024《手法通乳中医技术操作规范》。本视频为教学示意动画，临床操作须由经规范化培训的医护人员实施。</p>
+</div>
+<script>
+const CH=[[0,'片头'],[4.5,'认识手法通乳'],[24.1,'中医理论'],[47.3,'适应证与禁忌'],[64.9,'操作前评估'],[91.9,'操作前准备'],
+ [109.1,'① 清洁乳房'],[119.3,'辅助热敷'],[135.8,'② 放松乳房'],[151.1,'③ 穴位按摩'],[177.6,'④ 按揉乳晕'],[191.1,'⑤ 按压乳晕并对挤'],
+ [219.8,'⑥ 推捋积乳'],[241.5,'⑦ 处理积乳肿块'],[262.0,'观察与时限'],[283.4,'操作后处置'],[295.9,'健康宣教'],[315.6,'要点回顾']];
+const v=document.getElementById('v'),box=document.getElementById('chapters');
+const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+CH.forEach(([t,l])=>{const b=document.createElement('button');b.type='button';b.innerHTML='<span>'+l+'</span><time>'+fmt(t)+'</time>';
+ b.onclick=()=>{v.currentTime=t;v.play().catch(()=>{});window.scrollTo({top:0,behavior:'smooth'})};box.appendChild(b)});
+const bs=[...box.children];
+v.addEventListener('timeupdate',()=>{let k=0;CH.forEach((c,i)=>{if(v.currentTime>=c[0]-.2)k=i});bs.forEach((b,i)=>b.classList.toggle('on',i===k))});
+</script>
+</body>
+</html>
