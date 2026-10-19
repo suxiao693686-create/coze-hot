@@ -24,8 +24,7 @@ h1{font-size:20px;margin:0 0 4px;font-weight:700}
 </head>
 <body>
 <div class="player">
-  <video id="v" controls playsinline webkit-playsinline x5-playsinline preload="metadata" poster="https://cdn.jsdelivr.net/gh/suxiao693686-create/coze-hot@5651a97ee070ed20beb11ecc9fd3840f3c5fe7ec/tongru-video/poster.jpg">
-    <source src="https://cdn.jsdelivr.net/gh/suxiao693686-create/coze-hot@5651a97ee070ed20beb11ecc9fd3840f3c5fe7ec/tongru-video/video_lite.mp4" type="video/mp4">
+  <video id="v" controls playsinline webkit-playsinline x5-playsinline preload="metadata" poster="poster.jpg">
     <source src="video_lite.mp4" type="video/mp4">
     <source src="video.mp4" type="video/mp4">
   </video>
@@ -40,7 +39,7 @@ h1{font-size:20px;margin:0 0 4px;font-weight:700}
 const CH=[[0,'片头'],[4.5,'认识手法通乳'],[24.1,'中医理论'],[47.3,'适应证与禁忌'],[64.9,'操作前评估'],[91.9,'操作前准备'],
  [109.1,'① 清洁乳房'],[119.3,'辅助热敷'],[135.8,'② 放松乳房'],[151.1,'③ 穴位按摩'],[177.6,'④ 按揉乳晕'],[191.1,'⑤ 按压乳晕并对挤'],
  [219.8,'⑥ 推捋积乳'],[241.5,'⑦ 处理积乳肿块'],[262.0,'观察与时限'],[283.4,'操作后处置'],[295.9,'健康宣教'],[315.6,'要点回顾']];
-const v=document.getElementById('v');{const im=new Image();im.onerror=()=>{v.poster='poster.jpg'};im.src=v.poster;}
+const v=document.getElementById('v');
 const box=document.getElementById('chapters');
 const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 CH.forEach(([t,l])=>{const b=document.createElement('button');b.type='button';b.innerHTML='<span>'+l+'</span><time>'+fmt(t)+'</time>';
