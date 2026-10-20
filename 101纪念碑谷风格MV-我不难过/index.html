@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>我不难过 · 纪念碑谷风格 MV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14121c; --panel: rgba(24, 20, 34, .82); --fg: #f4ece2; --muted: #b9adc4;
+    --line: rgba(255, 255, 255, .14); --accent: #f0a46a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 "Noto Serif SC", "Songti SC", serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  #out { max-width: 100vw; max-height: 100vh; width: auto; height: auto; display: block;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45); }
+  #ui { position: fixed; left: 12px; right: 12px; bottom: 12px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; backdrop-filter: blur(8px);
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; transition: opacity .3s; }
+  #ui.hidden { opacity: 0; pointer-events: none; }
+  #ui button, #ui label.btn, #ui select { background: rgba(255, 255, 255, .08); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  #ui button:hover, #ui label.btn:hover { background: rgba(255, 255, 255, .16); }
+  #ui button.rec { color: #ff8f7a; }
+  #ui input[type=file] { display: none; }
+  #seek { flex: 1 1 260px; accent-color: var(--accent); }
+  #time, #shot { color: var(--muted); font-size: 12px; }
+  #shot { flex-basis: 100%; }
+  #board { position: fixed; top: 12px; right: 12px; bottom: 120px; width: min(420px, calc(100vw - 24px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    overflow: auto; display: none; backdrop-filter: blur(8px); }
+  #board.open { display: block; }
+  #board h3 { margin: 14px 0 6px; font-size: 15px; color: var(--accent); }
+  #board h3:first-child { margin-top: 0; }
+  #board .shot { padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+  #board .shot:hover { background: rgba(255, 255, 255, .08); }
+  #board .shot b { font-weight: 500; }
+  #board .shot small { display: block; color: var(--muted); }
+  #board .t { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+  #hint { position: fixed; top: 12px; left: 12px; color: var(--muted); font-size: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  body.render #ui, body.render #board, body.render #hint { display: none !important; }
+  body.render #out { box-shadow: none; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="stage"><canvas id="out"></canvas></div>
+<div id="hint">拖入 MP3 + LRC 即可同步 · H 隐藏面板 · 空格 播放/暂停</div>
+<div id="ui">
+  <label class="btn">🎵 音乐<input id="fAudio" type="file" accept="audio/*"></label>
+  <label class="btn">📝 歌词 LRC<input id="fLrc" type="file" accept=".lrc,.txt"></label>
+  <button id="bPlay">▶ 播放</button>
+  <button id="bRec" class="rec">● 录制视频</button>
+  <select id="sAr"><option value="16:9">横屏 16:9</option><option value="9:16">竖屏 9:16</option></select>
+  <button id="bBoard">分镜表</button>
+  <input id="seek" type="range" min="0" max="250" step="0.01" value="0">
+  <span id="time">0:00 / 4:10</span>
+  <span id="shot"></span>
+</div>
+<div id="board"></div>
+<audio id="audio" preload="auto"></audio>
+
+<script type="module">
+import * as THREE from 'three';
+THREE.ColorManagement.enabled = false;
+
+// ============================================================
+// 配置（URL 参数可覆盖）
+//   ?ar=9:16                 竖屏
+//   ?offset=0.3              歌词整体延后 0.3 秒
+//   ?sections=0,18,50,...    手动指定 9 个段落起点（秒），可再加第 10 个数作为结尾
+//   ?t=95                    定格在第 95 秒（截图用）
+//   ?render=1                离线渲染模式（render.mjs 使用）
+// ============================================================
+const params = new URLSearchParams(location.search);
+const CONFIG = {
+  aspect: params.get('ar') === '9:16' ? '9:16' : '16:9',
+  lyricOffset: Number(params.get('offset') || 0),
+  sections: params.get('sections') ? params.get('sections').split(',').map(Number) : null,
+  freezeAt: params.has('t') ? Number(params.get('t')) : null,
+  renderMode: params.get('render') === '1',
+};
+const PORTRAIT = CONFIG.aspect === '9:16';
+const W = PORTRAIT ? 1080 : 1920, H = PORTRAIT ? 1920 : 1080;
+
+// ============================================================
+// 小工具
+// ============================================================
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const smooth = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const ease = {
+  inOut: k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2,
+  out: k => 1 - Math.pow(1 - k, 3),
+  outBack: k => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); },
+  inOutBack: k => { const c2 = 1.70158 * 1.525; return k < .5
+    ? (Math.pow(2 * k, 2) * ((c2 + 1) * 2 * k - c2)) / 2
+    : (Math.pow(2 * k - 2, 2) * ((c2 + 1) * (k * 2 - 2) + c2) + 2) / 2; },
+};
+const bell = (x, a, b) => smooth(a, a + (b - a) * .3, x) * (1 - smooth(b - (b - a) * .3, b, x));
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// 关键帧插值：keys = [[u, {字段}], ...]
+function kf(u, keys, e = ease.inOut) {
+  if (u <= keys[0][0]) return { ...keys[0][1] };
+  for (let i = 0; i < keys.length - 1; i++) {
+    const [u0, a] = keys[i], [u1, b] = keys[i + 1];
+    if (u <= u1) {
+      const k = e(clamp((u - u0) / (u1 - u0))), o = { ...a };
+      for (const key in b) o[key] = key in a ? lerp(a[key], b[key], k) : b[key];
+      return o;
+    }
+  }
+  return { ...keys[keys.length - 1][1] };
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+// 沿折线行走
+class Path {
+  constructor(pts) {
+    this.p = pts.map(a => a.isVector3 ? a.clone() : V(...a));
+    this.cum = [0];
+    for (let i = 1; i < this.p.length; i++) this.cum.push(this.cum[i - 1] + this.p[i].distanceTo(this.p[i - 1]));
+    this.len = this.cum[this.cum.length - 1];
+  }
+  at(d) {
+    d = clamp(d, 0, this.len);
+    let i = 1;
+    while (i < this.cum.length - 1 && this.cum[i] < d) i++;
+    const a = this.p[i - 1], b = this.p[i], seg = (this.cum[i] - this.cum[i - 1]) || 1;
+    const k = (d - this.cum[i - 1]) / seg;
+    const dir = b.clone().sub(a);
+    return { pos: a.clone().lerp(b, k), yaw: Math.atan2(dir.x, dir.z), i: i - 1 };
+  }
+}
+
+// ============================================================
+// 调色板 —— 每一章一套「纪念碑谷式」三明度配色：顶面最亮、左面中间、右面最暗
+// ============================================================
+const PAL = {
+  dawn:  { sky: ['#E6BFCD', '#FBE8D4'], top: '#FBF2E6', left: '#EFD3C3', right: '#CF9FA0', dark: '#AD7F88',
+           door: '#5C3F58', accent: '#EE8A6C', leaf: '#A8C9A1', text: '#5E4458', fogLo: -14, fogHi: -6 },
+  loop:  { sky: ['#F2B0A4', '#FCE6CD'], top: '#FDF5E9', left: '#A4D4CA', right: '#5F9FA2', dark: '#467E86',
+           door: '#2F4E58', accent: '#F0705F', leaf: '#F2C6A0', text: '#5A3442', fogLo: -8, fogHi: -1.5 },
+  dusk:  { sky: ['#B77AA6', '#F8C29A'], text: '#4A2740' },
+  court: { sky: ['#C9BCEF', '#F7E7F1'], top: '#F8F3FB', left: '#CDBBE7', right: '#9383BF', dark: '#6F619C',
+           door: '#3C3266', accent: '#F2B544', leaf: '#B5D6B9', text: '#463A73', fogLo: -9, fogHi: -2 },
+  night: { sky: ['#11173A', '#3B356E'], top: '#BCC6F2', left: '#717CC6', right: '#454E96', dark: '#2F3670',
+           water: '#20285A', door: '#1A1F45', accent: '#FFD27A', text: '#F4EBDD', fogLo: -1.2, fogHi: .4 },
+  grey:  { sky: ['#A9ADBB', '#DCDEE4'], text: '#454957' },
+  gold:  { sky: ['#F6AE86', '#FFF2D5'], top: '#FFF9EE', left: '#F7D7A8', right: '#E3A57D', dark: '#C78769',
+           door: '#7A4B3A', accent: '#FF8A5B', leaf: '#B9D39A', text: '#6E4430', fogLo: -11, fogHi: -3.5 },
+};
+const FIG = {
+  ida:  { robe: ['#FFFDF8', '#CFC7DA'], hat: ['#FFFFFF', '#CBC8DE'], face: ['#F6E7D7', '#D8C0B0'] },
+  you:  { robe: ['#59649E', '#2A3062'], hat: ['#2F3669', '#161A3B'], face: ['#F6E7D7', '#D8C0B0'] },
+};
+
+// ============================================================
+// 着色器：方块按法线方向取三种明度（纪念碑谷的平涂光），并做「高度雾」让柱子沉入天色
+// ============================================================
+const U = { fogC: { value: new THREE.Color('#fff') }, fogLo: { value: -10 }, fogHi: { value: -2 }, desat: { value: 0 } };
+const VS = `varying vec3 vN; varying vec3 vW;
+void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz;
+  vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const POST = `uniform vec3 fogC, tint; uniform float fogLo, fogHi, desat, tintK, opacity;
+varying vec3 vN; varying vec3 vW;
+vec3 post(vec3 c){
+  c = mix(c, tint, tintK);
+  c = mix(fogC, c, smoothstep(fogLo, fogHi, vW.y));
+  float g = dot(c, vec3(.299, .587, .114));
+  return mix(c, vec3(g) * .9 + .07, desat);
+}`;
+const FS_FACE = `uniform vec3 cTop, cL, cR, cD; ${POST}
+void main(){ vec3 n = normalize(vN); vec3 c;
+  if (n.y > .6) c = cTop; else if (n.y < -.6) c = cD;
+  else if (abs(n.z) >= abs(n.x)) c = n.z > 0. ? cL : mix(cR, cD, .35);
+  else c = n.x > 0. ? cR : mix(cL, cD, .25);
+  gl_FragColor = vec4(post(c), opacity); }`;
+const FS_SMOOTH = `uniform vec3 base, shade; ${POST}
+void main(){ vec3 n = normalize(vN);
+  float l = dot(n, normalize(vec3(-.35, .9, .45)));
+  gl_FragColor = vec4(post(mix(shade, base, smoothstep(-.35, .85, l))), opacity); }`;
+const common = (o = {}) => ({ fogC: U.fogC, fogLo: U.fogLo, fogHi: U.fogHi, desat: U.desat,
+  tint: { value: new THREE.Color(o.tint || '#ffffff') }, tintK: { value: 0 }, opacity: { value: o.opacity ?? 1 } });
+function faceMat(p, o = {}) {
+  return new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS_FACE, transparent: !!o.transparent,
+    depthWrite: !o.ghost, side: o.side || THREE.FrontSide,
+    uniforms: { cTop: { value: new THREE.Color(p.top) }, cL: { value: new THREE.Color(p.left) },
+      cR: { value: new THREE.Color(p.right) }, cD: { value: new THREE.Color(p.dark || p.right) }, ...common(o) } });
+}
+const flatMat = (c, o = {}) => faceMat({ top: c, left: c, right: c, dark: c }, o);
+function smoothMat(base, shade, o = {}) {
+  return new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS_SMOOTH, transparent: !!o.transparent,
+    depthWrite: !o.ghost, uniforms: { base: { value: new THREE.Color(base) },
+      shade: { value: new THREE.Color(shade || base) }, ...common(o) } });
+}
+
+// ============================================================
+// 渲染器与相机（正交相机 = 纪念碑谷的等距视角）
+// ============================================================
+const out = document.getElementById('out');
+out.width = W; out.height = H;
+const g2 = out.getContext('2d');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H, false); renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.sortObjects = true;
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 600);
+const ISO_EL = Math.atan(1 / Math.SQRT2) * 180 / Math.PI;   // 35.264°：彭罗斯错觉只在这个角度成立
+const SIZE_MUL = PORTRAIT ? 1.75 : 1;
+
+function setCam(c) {
+  const az = c.az * Math.PI / 180, el = c.el * Math.PI / 180, d = 200;
+  const tgt = V(c.tx, c.ty, c.tz);
+  camera.position.set(tgt.x + d * Math.cos(el) * Math.sin(az), tgt.y + d * Math.sin(el), tgt.z + d * Math.cos(el) * Math.cos(az));
+  camera.up.set(0, 1, 0);
+  camera.lookAt(tgt);
+  camera.rotateZ((c.roll || 0) * Math.PI / 180);
+  const s = c.size * SIZE_MUL, a = W / H;
+  camera.left = -s * a; camera.right = s * a; camera.top = s; camera.bottom = -s;
+  camera.updateProjectionMatrix();
+}
+const camOf = (t, o = {}) => ({ tx: t.x, ty: t.y, tz: t.z, az: 45, el: ISO_EL, size: 4, roll: 0, ...o });
+
+// ============================================================
+// 几何体积木
+// ============================================================
+const G = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  sphere: new THREE.SphereGeometry(1, 40, 24),
+  hemi: new THREE.SphereGeometry(1, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+  cone: new THREE.ConeGeometry(1, 1, 40),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 40),
+  ring: new THREE.RingGeometry(.92, 1, 64).rotateX(-Math.PI / 2),
+};
+function box(parent, mat, cx, y0, y1, cz, w = 1, d = 1) {
+  const m = new THREE.Mesh(G.box, mat);
+  m.scale.set(w + .004, y1 - y0, d + .004); m.position.set(cx, (y0 + y1) / 2, cz); parent.add(m); return m;
+}
+function mesh(parent, geo, mat, x, y, z, sx = 1, sy = sx, sz = sx) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); parent.add(m); return m;
+}
+function archGeo(w, h) {
+  const s = new THREE.Shape(), r = w / 2;
+  s.moveTo(-r, 0); s.lineTo(r, 0); s.lineTo(r, h - r); s.absarc(0, h - r, r, 0, Math.PI, false); s.lineTo(-r, 0);
+  return new THREE.ShapeGeometry(s, 24);
+}
+// 拱门/拱窗：face = '+z' | '+x'
+function arch(parent, mat, x, y, z, w, h, face = '+z') {
+  const m = new THREE.Mesh(archGeo(w, h), mat);
+  m.position.set(x, y, z);
+  if (face === '+x') m.rotation.y = Math.PI / 2;
+  parent.add(m); return m;
+}
+function cloud(parent, mat, x, y, z, s, seed) {
+  const r = mulberry32(seed), g = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const k = .45 + r() * .55;
+    mesh(g, G.sphere, mat, (r() - .5) * 2.4 * s, (r() - .2) * .25 * s, (r() - .5) * 1.4 * s, k * s, k * s * .55, k * s);
+  }
+  g.position.set(x, y, z); g.userData.x0 = x; parent.add(g); return g;
+}
+const driftClouds = (list, t) => list.forEach((cl, i) => { cl.position.x = cl.userData.x0 + Math.sin(t * .05 + i * 1.7) * .8; });
+
+// ============================================================
+// 角色：戴尖帽的白衣小人（致敬艾达）与深蓝帽的「你」
+// ============================================================
+function makeFigure(kind, o = {}) {
+  const C = FIG[kind], g = new THREE.Group(), body = new THREE.Group(), mats = [];
+  const mk = (pair) => { const m = smoothMat(pair[0], pair[1], { transparent: true, ghost: o.ghost }); mats.push(m); return m; };
+  const robe = new THREE.Mesh(new THREE.CylinderGeometry(.075, .2, .44, 32), mk(C.robe)); robe.position.y = .22;
+  const head = mesh(body, G.sphere, mk(C.face), 0, .5, 0, .1);
+  const hat = new THREE.Mesh(G.cone, mk(C.hat)); hat.scale.set(.122, .42, .122); hat.position.set(0, .77, -.015);
+  hat.rotation.x = -.1;
+  body.add(robe, hat);
+  const footM = mk(['#4A3F5E', '#2E2640']);
+  const f1 = mesh(g, G.sphere, footM, -.06, .025, .04, .045), f2 = mesh(g, G.sphere, footM, .06, .025, .04, .045);
+  g.add(body);
+  g.scale.setScalar(o.scale || .82);
+  g.userData = { body, hat, head, feet: [f1, f2], mats };
+  scene.add(g);
+  return g;
+}
+// 姿态：walk = 步伐相位（null 表示站立），sit = 0..1 坐下，dip = 低头
+function pose(fig, pos, yaw, { walk = null, sit = 0, dip = 0, opacity = 1, visible = true } = {}) {
+  fig.visible = visible && opacity > .01;
+  fig.position.copy(pos); fig.rotation.y = yaw;
+  const { body, hat, feet, mats } = fig.userData;
+  const ph = walk == null ? 0 : walk * Math.PI;
+  body.position.y = (walk == null ? 0 : Math.abs(Math.sin(ph)) * .04) - sit * .1;
+  body.scale.y = 1 - sit * .16;
+  body.rotation.z = walk == null ? 0 : Math.sin(ph) * .05;
+  hat.rotation.x = -.1 + dip * .45;
+  feet[0].position.z = .04 + (walk == null ? 0 : Math.sin(ph) * .07);
+  feet[1].position.z = .04 - (walk == null ? 0 : Math.sin(ph) * .07);
+  feet[0].visible = feet[1].visible = sit < .5;
+  for (const m of mats) m.uniforms.opacity.value = opacity;
+}
+const STEP = .26;   // 一步的长度（世界单位）
+
+const ida = makeFigure('ida');
+const you = makeFigure('you');
+const ghost = makeFigure('you', { ghost: true });
+
+// ============================================================
+// 场景 A：回声之塔（序章 + 第一章）
+// ============================================================
+const A = (() => {
+  const P = PAL.dawn, g = new THREE.Group(), m = faceMat(P), door = flatMat(P.door);
+  const glow = flatMat(P.accent, { transparent: true, opacity: 0 });
+  box(g, m, 0, -18, 10, 0, 4, 4);
+  for (const y of [6.2, 1.2, -3.8]) box(g, m, 0, y, y + .3, 0, 4.24, 4.24);
+  for (const y of [7.4, 2.4]) for (const z of [-.9, .9]) arch(g, door, 2.125, y, z, .42, .8, '+x');
+  for (const y of [7.4, 2.4]) for (const x of [-.9, .9]) arch(g, door, x, y, 2.125, .42, .8);
+  box(g, m, -1, 10, 10.9, -1, 1.6, 1.6);
+  mesh(g, G.hemi, smoothMat(P.top, P.right), -1, 10.9, -1, .8);
+  mesh(g, G.cone, smoothMat(P.accent, '#B9574A'), -1, 11.95, -1, .07, .5, .07);
+  box(g, m, -1.6, 10, 10.25, 1.6, .5, .5);
+  mesh(g, G.sphere, smoothMat(P.leaf, '#6F9A78'), -1.6, 10.75, 1.6, .38);
+  box(g, flatMat('#8C6B66'), -1.6, 10.25, 10.45, 1.6, .06, .06);
+
+  // 螺旋阶梯：两圈 40 级，每级下降 0.5，分成两个半级
+  const side = [[2.5, -1.5], [2.5, -.5], [2.5, .5], [2.5, 1.5], [2.5, 2.5], [1.5, 2.5], [.5, 2.5], [-.5, 2.5],
+    [-1.5, 2.5], [-2.5, 2.5], [-2.5, 1.5], [-2.5, .5], [-2.5, -.5], [-2.5, -1.5], [-2.5, -2.5], [-1.5, -2.5],
+    [-.5, -2.5], [.5, -2.5], [1.5, -2.5], [2.5, -2.5]];
+  const cells = [], pts = [], cellPt = [];
+  let prev = [1.5, 10, -1.5];
+  for (let k = 0; k < 40; k++) {
+    const [x, z] = side[k % 20], y = 9.75 - .5 * k, dx = Math.sign(x - prev[0]), dz = Math.sign(z - prev[2]);
+    const w = dx ? .5 : 1, d = dz ? .5 : 1;
+    box(g, m, x - dx * .25, y - .6, y + .25, z - dz * .25, w, d);
+    box(g, m, x + dx * .25, y - .6, y, z + dz * .25, w, d);
+    pts.push([x - dx * .25, y + .25, z - dz * .25], [x + dx * .25, y, z + dz * .25]);
+    cells.push([x, y, z]); cellPt.push(pts.length - 1);
+    prev = [x, y, z];
+  }
+  // 脚印光点
+  const feet = cells.map(([x, y, z]) => {
+    const disc = mesh(g, G.cyl, flatMat(P.accent, { transparent: true, opacity: 0 }), x, y + .012, z, .2, .02, .2);
+    return disc;
+  });
+  // 塔底的门（第 26 级旁）
+  const DOOR_K = 26, [dx0, dy0] = cells[DOOR_K];
+  arch(g, door, dx0, dy0, 2.012, .62, 1.02);
+  const doorGlow = arch(g, glow, dx0, dy0 - .04, 2.02, .78, 1.2);
+  const clouds = [];
+  const cm = smoothMat('#FFFFFF', '#F1D9E0', { transparent: true, opacity: .96 });
+  [[-4, 16.5, 2, 1.7], [2, 18.5, -4, 2.1], [-5, 13.5, -5, 1.5], [-1, 21, -2, 1.6], [4, 15.5, -6, 1.6],
+   [-7, -7, 1, 1.8], [6, -8, 5, 1.6], [-2, -9, 7, 1.7], [7, -6.5, -3, 1.5]].forEach(([x, y, z, s], i) => clouds.push(cloud(g, cm, x, y, z, s, 11 + i)));
+  scene.add(g);
+  const start = V(.65, 10, 1.45), youStart = V(1.45, 10, .65);
+  const idaPath = new Path([start, [1.5, 10, -1.5], ...pts.slice(0, cellPt[DOOR_K] + 1)]);
+  const youPath = new Path([youStart, [1.5, 10, -1.5], ...pts]);
+  return { g, cells, feet, doorGlow, glow, clouds, idaPath, youPath, start, youStart, DOOR_K, doorPos: V(dx0, dy0, 2.05) };
+})();
+
+// ============================================================
+// 场景 B：不难过的回廊（彭罗斯阶梯）
+//   一圈 16 格、上升 2 格；最后一段沿视线方向 (1,1,1) 平移，
+//   所以只在等距角度下「首尾相连」——换个角度就会露馅。
+// ============================================================
+const B = (() => {
+  const P = PAL.loop, root = new THREE.Group(), halfA = new THREE.Group(), halfB = new THREE.Group();
+  root.add(halfA, halfB);
+  const m = faceMat(P), win = flatMat(P.door);
+  const moves = [...Array(5).fill([1, 0]), ...Array(5).fill([0, 1]), ...Array(3).fill([-1, 0]), ...Array(3).fill([0, -1])];
+  const rises = new Set([2, 7, 11, 14]);
+  const cells = [[0, 0, 0]];
+  for (let i = 0; i < 16; i++) {
+    const [x, y, z] = cells[i], [dx, dz] = moves[i];
+    cells.push([x + dx, y + (rises.has(i) ? .5 : 0), z + dz]);
+  }
+  const pts = [];
+  for (let i = 0; i < 16; i++) {
+    const [x, y, z] = cells[i], grp = i < 8 ? halfA : halfB;
+    if (i > 0 && rises.has(i - 1)) {
+      const [dx, dz] = moves[i - 1], w = dx ? .5 : 1, d = dz ? .5 : 1;
+      box(grp, m, x - dx * .25, -9, y - .25, z - dz * .25, w, d);
+      box(grp, m, x + dx * .25, -9, y, z + dz * .25, w, d);
+      pts.push([x - dx * .25, y - .25, z - dz * .25], [x + dx * .25, y, z + dz * .25]);
+    } else { box(grp, m, x, -9, y, z); pts.push([x, y, z]); }
+    // 外立面拱窗
+    if (i >= 6 && i <= 10) arch(grp, win, x + .515, y - 1.9, z, .34, .62, '+x');
+    if (i >= 11 && i <= 13) arch(grp, win, x, y - 1.9, z + .515, .34, .62);
+  }
+  pts.push([2, 2, 2]);   // 第 16 格 = 第 0 格 + (2,2,2)，在等距视角下与起点重合
+  // 角楼尖塔
+  const spireM = smoothMat(P.accent, '#B8483E');
+  for (const i of [5, 10]) { const [x, y, z] = cells[i];
+    mesh(i < 8 ? halfA : halfB, G.cone, spireM, x, y + .3, z, .16, .6, .16); }
+  // 回廊中央：圆顶小塔
+  const core = new THREE.Group(); halfA.add(core);
+  box(core, m, 2.5, -9, -.6, 2.5, 1.6, 1.6);
+  mesh(core, G.hemi, smoothMat(P.top, P.right), 2.5, -.6, 2.5, .78);
+  mesh(core, G.cone, spireM, 2.5, .45, 2.5, .07, .5, .07);
+  scene.add(root);
+  const path = new Path(pts);
+  const center = V(2.5, .8, 2.5);
+  return { g: root, halfA, halfB, mats: [m], path, center, cells, L: path.len };
+})();
+
+// ============================================================
+// 场景 C：旋转之庭
+// ============================================================
+const C = (() => {
+  const P = PAL.court, g = new THREE.Group(), m = faceMat(P), door = flatMat(P.door);
+  const glow = flatMat(P.accent, { transparent: true, opacity: 0 });
+  box(g, m, 0, -10, 0, 0, 2, 2);                 // 中轴
+  box(g, m, 0, -10, 0, -5, 2, 2);                // 入口平台 A
+  box(g, m, 5, -10, 0, 0, 2, 2);                 // 拱门平台 B
+  arch(g, door, .5, -2.2, 1.012, .4, .7); arch(g, door, -.5, -2.2, 1.012, .4, .7);
+  arch(g, door, 6.012, -2.2, 0, .4, .7, '+x');
+  const bridge = new THREE.Group(); g.add(bridge);
+  box(bridge, m, 0, -.5, 0, 2.5, 1, 3); box(bridge, m, 0, -.5, 0, -2.5, 1, 3);
+  for (const s of [1, -1]) box(bridge, m, 0, -.5, -.3, s * 3.9, .3, .2);
+  // 金色手柄
+  const gold = smoothMat(P.accent, '#B87D22');
+  const crank = new THREE.Group(); crank.position.set(-.55, 0, .55); g.add(crank);
+  mesh(crank, G.cyl, gold, 0, .08, 0, .2, .16, .2);
+  const wheel = new THREE.Group(); wheel.position.y = .2; crank.add(wheel);
+  mesh(wheel, G.cyl, gold, 0, 0, 0, .3, .05, .3);
+  mesh(wheel, G.box, gold, .22, .14, 0, .06, .28, .06);
+  // 拱门
+  for (const x of [4.35, 5.65]) box(g, m, x, 0, 1.45, -.6, .3, .3);
+  box(g, m, 5, 1.45, 1.75, -.6, 1.6, .3);
+  mesh(g, G.cone, gold, 5, 2.05, -.6, .09, .55, .09);
+  arch(g, door, 5, 0, -.436, 1.0, 1.42);
+  const doorGlow = arch(g, glow, 5, 0, -.428, 1.0, 1.42);
+  // 远处的小岛
+  const isle = (x, z, top, s = 1) => { box(g, m, x, -10, top, z, s, s); mesh(g, G.cone, smoothMat(P.top, P.right), x, top + .35 * s, z, .3 * s, .7 * s, .3 * s); };
+  isle(-5, 3, -1.5); isle(8.5, -5, .8, 1.2); isle(-3, -9, 1.6, .8); isle(9, 4, -2.4, .9);
+  const cm = smoothMat('#FFFFFF', '#E3D8F3', { transparent: true, opacity: .95 });
+  const clouds = [[-6, -3, -3, 1.6], [7, -4, 6, 1.8], [2, -6, 7, 1.5]].map(([x, y, z, s], i) => cloud(g, cm, x, y, z, s, 40 + i));
+  scene.add(g);
+  return { g, bridge, wheel, doorGlow, glow, clouds,
+    inPath: new Path([[0, 0, -5.3], [0, 0, -1.1], [-.15, 0, -.05]]),
+    outPath: new Path([[-.15, 0, -.05], [.6, 0, 0], [4.2, 0, 0], [5, 0, .35], [5, 0, -.3]]) };
+})();
+
+// ============================================================
+// 场景 D：夜之水阶（石柱数量 = 第二段主歌的歌词行数）
+// 场景 E：自由之阶（台阶数量 = 最后副歌的歌词行数）
+// 两者都依赖歌词，因此在载入 LRC 后重建
+// ============================================================
+let D = null, E = null;
+function disposeGroup(grp) { if (!grp) return; scene.remove(grp); }
+function buildD(n) {
+  disposeGroup(D?.g);
+  const P = PAL.night, g = new THREE.Group(), m = faceMat(P), water = flatMat(P.water, { transparent: true, opacity: .52 });
+  box(g, water, 10, -.6, 0, -10, 90, 90);
+  const pillars = [], ripples = [], rm = [];
+  for (let k = 0; k <= n; k++) {
+    const pg = new THREE.Group(); pg.position.set(k * 1.6, 0, -k * 1.6); g.add(pg);
+    box(pg, m, 0, -4, .55, 0, 1, 1);
+    pillars.push(pg);
+    const mat = flatMat('#C9D2FF', { transparent: true, opacity: 0 }); rm.push(mat);
+    ripples.push(mesh(g, G.ring, mat, k * 1.6, .02, -k * 1.6, 1));
+  }
+  const far = (n + 2.6) * 1.6;
+  const farG = new THREE.Group(); farG.position.set(far, 0, -far); g.add(farG);
+  box(farG, m, 0, -5, 1.7, 0, 1.3, 1.3);
+  const lantern = mesh(g, G.sphere, flatMat(P.accent), 0, 0, 0, .09);
+  const halo = mesh(g, G.sphere, flatMat(P.accent, { transparent: true, opacity: .22, ghost: true }), 0, 0, 0, .32);
+  const fr = flatMat('#C9D2FF', { transparent: true, opacity: 0 });
+  const farRipple = mesh(g, G.ring, fr, far, .02, -far, 1);
+  // 远景剪影
+  const sil = faceMat({ top: '#56609F', left: '#3B447F', right: '#2B3368', dark: '#232A5A' });
+  const ruin = (x, z, h, s) => { box(g, sil, x, -1, h, z, s, s); mesh(g, G.hemi, smoothMat('#56609F', '#2B3368'), x, h, z, s * .45); };
+  for (let j = 0; j * 3 <= n + 3; j++) { const b = j * 3 * 1.6; ruin(b - 3.6 - (j % 2) * 1.5, -b - 3.6 - (j % 2) * 1.5, 1.6 + (j % 3) * .9, 1 + (j % 2) * .4); }
+  ruin(far - 3.2, -far - 4.2, 2.8, 1.5);
+  scene.add(g);
+  D = { g, pillars, ripples, rm, farG, lantern, halo, farRipple, fr, n, far };
+}
+function buildE(n) {
+  disposeGroup(E?.g);
+  const P = PAL.gold, g = new THREE.Group(), m = faceMat(P), door = flatMat(P.door);
+  const steps = [], pos = [[0, 0, 0]];
+  for (let k = 1; k <= n; k++) { const [x, y, z] = pos[k - 1]; pos.push(k % 2 ? [x + 1, y + .5, z] : [x, y + .5, z - 1]); }
+  pos.forEach(([x, y, z], k) => {
+    const sg = new THREE.Group(); sg.position.set(x, 0, z); g.add(sg);
+    if (k) box(sg, m, 0, y - 16, y, 0);
+    steps.push(sg);
+  });
+  // 起点是一块回廊碎片（回廊配色）
+  const LP = PAL.loop;
+  box(steps[0], faceMat(LP), 0, -16, 0, 0);
+  // 山顶平台
+  const [lx, ly, lz] = pos[n], dir = (n + 1) % 2 ? [1, 0] : [0, -1];
+  const sx = lx + dir[0] * 2, sz = lz + dir[1] * 2, top = ly + .5;
+  box(g, m, sx, top - 16, top, sz, 3, 3);
+  for (const o of [-.65, .65]) box(g, m, sx + o, top, top + 1.5, sz - .9, .3, .3);
+  box(g, m, sx, top + 1.5, top + 1.8, sz - .9, 1.6, .3);
+  mesh(g, G.cone, smoothMat(P.accent, '#C2563A'), sx, top + 2.1, sz - .9, .09, .55, .09);
+  arch(g, door, sx, top, sz - .736, 1.0, 1.42);
+  mesh(g, G.sphere, smoothMat(P.leaf, '#86A86E'), sx + 1.05, top + .45, sz + .95, .32);
+  // 漂浮的回廊碎片（片尾远景）
+  const lm = faceMat(LP), debris = [];
+  const r = mulberry32(7);
+  for (let i = 0; i < 6; i++) {
+    const dg = new THREE.Group();
+    const back = 9 + r() * 8, side = (r() - .5) * 18;
+    dg.position.set(lx / 2 - back + side, ly * .5 + (r() - .2) * 6, lz / 2 - back - side); g.add(dg);
+    box(dg, lm, 0, -.6 - r() * 1.2, 0, 0, .5, .5); debris.push({ dg, y0: dg.position.y, ph: r() * 6 });
+  }
+  const cm = smoothMat('#FFFFFF', '#F6DCC2', { transparent: true, opacity: .96 });
+  const clouds = [];
+  const rc = mulberry32(99);
+  for (let i = 0; i < 12; i++) {
+    const front = (rc() - .35) * 14, side = (rc() - .5) * 22;
+    clouds.push(cloud(g, cm, lx * .5 + front + side, -4.5 + rc() * 1.5 + (front < 0 ? 3 : 0), lz * .5 + front - side, 1.5 + rc(), 200 + i));
+  }
+  scene.add(g);
+  E = { g, steps, pos: pos.map(p => V(...p)), n, summit: V(sx, top, sz), debris, clouds };
+}
+
+// ============================================================
+// 歌词与段落
+// ============================================================
+const SEC_KEYS = ['intro', 'v1', 'c1', 'inter1', 'v2', 'c2', 'bridge', 'c3', 'outro'];
+const SEC_NAME = { intro: '前奏', v1: '主歌一', c1: '副歌一', inter1: '间奏', v2: '主歌二', c2: '副歌二', bridge: '桥段', c3: '终副歌', outro: '尾奏' };
+const DEFAULT_STARTS = [0, 18, 50, 80, 95, 127, 157, 185, 232], DEFAULT_DUR = 250;
+const SUNG = new Set(['v1', 'c1', 'v2', 'c2', 'bridge', 'c3']);
+const HOOK = /不难过/;
+const CREDIT_RE = /^(作词|作曲|编曲|词|曲|制作人?|监制|演唱|歌手|原唱|混音|录音|和声|吉他|贝斯|鼓|弦乐|母带|出品|发行|企划|统筹|OP|SP|Lyric(s|ist)?|Composer|Arranger|Producer)\s*[:：]/i;
+
+function parseLRC(text) {
+  const lines = [], credits = []; let off = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const mo = raw.match(/\[offset:\s*([+-]?\d+)\s*\]/i); if (mo) { off = Number(mo[1]) / 1000; continue; }
+    const tags = [...raw.matchAll(/\[(\d{1,3}):(\d{1,2}(?:[.:]\d{1,3})?)\]/g)]; if (!tags.length) continue;
+    const txt = raw.replace(/\[[^\]]*\]/g, '').trim();
+    if (CREDIT_RE.test(txt)) { if (!credits.includes(txt)) credits.push(txt); continue; }
+    for (const mm of tags) lines.push({ t: Number(mm[1]) * 60 + Number(mm[2].replace(':', '.')), text: txt });
+  }
+  lines.sort((a, b) => a.t - b.t);
+  const sung = lines.filter((l, i) => l.text && !(i < 3 && /\s[-—]\s/.test(l.text)));
+  sung.forEach(l => { l.t = l.t - off + CONFIG.lyricOffset; });
+  return { lines: sung, credits };
+}
+// 根据歌词自动切分段落：长空档 = 间奏；含「不难过」的第一句 = 副歌开始
+function detectSections(lines, dur) {
+  if (lines.length < 8) return null;
+  const parts = []; let cur = [lines[0]];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].t - lines[i - 1].t > 9.5) { parts.push(cur); cur = []; }
+    cur.push(lines[i]);
+  }
+  parts.push(cur);
+  if (parts.length < 3) return null;
+  const gaps = []; lines.forEach((l, i) => i && l.t - lines[i - 1].t < 9.5 && gaps.push(l.t - lines[i - 1].t));
+  gaps.sort((a, b) => a - b);
+  const lineDur = gaps[Math.floor(gaps.length / 2)] || 4;
+  const endOf = (p, nextT) => Math.min(p[p.length - 1].t + lineDur * 1.25, nextT - .5);
+  const [p1, p2, ...rest] = parts, p3 = rest.flat();
+  const h = p => p.findIndex(l => HOOK.test(l.text));
+  const h1 = h(p1), h2 = h(p2), h3 = h(p3);
+  if (h1 <= 0 || h2 <= 0) return null;
+  const s = [0, p1[0].t, p1[h1].t, endOf(p1, p2[0].t), p2[0].t, p2[h2].t];
+  if (h3 > 0) s.push(p3[0].t, p3[h3].t); else s.push(endOf(p2, p3[0].t), p3[0].t);
+  s.push(endOf(p3, dur));
+  for (let i = 1; i < s.length; i++) if (!(s[i] > s[i - 1])) return null;
+  return s;
+}
+function buildTimeline(parsed, duration) {
+  const has = !!(parsed && parsed.lines.length);
+  let dur = duration || (has ? parsed.lines[parsed.lines.length - 1].t + 18 : DEFAULT_DUR);
+  let starts = null, mode = '默认段落';
+  if (CONFIG.sections && CONFIG.sections.length >= 9) {
+    starts = CONFIG.sections.slice(0, 9); mode = '手动段落';
+    if (CONFIG.sections.length >= 10 && !duration) dur = CONFIG.sections[9];
+  } else if (has) { starts = detectSections(parsed.lines, dur); if (starts) mode = '按歌词自动对齐'; }
+  if (!starts) starts = DEFAULT_STARTS.map(s => s * dur / DEFAULT_DUR);
+  for (let i = 1; i < 9; i++) starts[i] = Math.max(starts[i], starts[i - 1] + .5);
+  const secs = SEC_KEYS.map((key, i) => ({ key, start: starts[i], end: i < 8 ? starts[i + 1] : dur, lines: [] }));
+  let lines;
+  if (has) lines = parsed.lines.map(l => ({ ...l }));
+  else {
+    lines = [];
+    for (const s of secs) if (SUNG.has(s.key)) for (let t = s.start + .6; t < s.end - 1.5; t += 4.2) lines.push({ t, text: '' });
+  }
+  lines.forEach((l, i) => { l.end = i < lines.length - 1 ? Math.min(lines[i + 1].t, l.t + 8) : Math.min(dur, l.t + 6); });
+  for (const l of lines) {
+    const s = secs.find(s => l.t >= s.start && l.t < s.end) || secs[secs.length - 1];
+    l.sec = s.key; l.li = s.lines.length; s.lines.push(l);
+  }
+  const by = Object.fromEntries(secs.map(s => [s.key, s]));
+  return { duration: dur, sections: secs, by, lines, credits: parsed?.credits || [], has, mode };
+}
+let TL = null;
+function setTimeline(parsed, duration) {
+  TL = buildTimeline(parsed, duration);
+  buildD(clamp(TL.by.v2.lines.length, 5, 14));
+  buildE(clamp(TL.by.c3.lines.length, 6, 16));
+  window.dispatchEvent(new Event('timeline'));
+}
+
+// ============================================================
+// 分镜（也用于界面上的「分镜表」）
+// ============================================================
+const STORY = {
+  intro:  { chapter: null, shots: [
+    [0, '云海', '粉色晨雾里云层缓缓飘过，片名「我不难过」浮现', '高空俯视 · 缓慢偏转'],
+    [.38, '穿云而下', '镜头穿过云层，露出云上的白色高塔与圆顶', '升降镜头下降 + 推近'],
+    [.72, '转身', '深蓝帽的「你」转身走下台阶，白帽小人留在原地', '等距固定机位 · 缓推近'] ] },
+  v1:     { chapter: ['第一章', '回声之塔'], shots: [
+    [0, '独自下塔', '她沿螺旋阶梯独自往下走，追着那个人走过的路', '环绕跟拍：镜头随她绕塔旋转'],
+    [.3, '脚印发光', '每唱一句，她脚下的台阶亮起一枚光点，像记忆的脚印', '跟拍 · 每句轻推'],
+    [.55, '回声', '「你」的幽灵身影在前方几级台阶浮现，又消散', '中景 · 慢摇'],
+    [.84, '门', '塔底拱门亮起，她转身走进光里', '推近 → 白光转场'] ] },
+  c1:     { chapter: ['第二章', '不难过的回廊'], shots: [
+    [0, '不可能的回廊', '彭罗斯阶梯：她一直往上走，却永远回到原点', '锁死等距视角（错觉成立的唯一角度）'],
+    [.22, '绕圈', '镜头贴着她绕圈；每句歌词，画面轻轻「呼吸」一次', '跟拍 + 节拍缩放'],
+    [.5, '强撑', '画面微微倾斜，像一个强撑的笑', '荷兰角 ±4°'],
+    [.8, '原地打转', '拉远，回廊完整显现：原来一直在原地打转', '快速拉远'] ] },
+  inter1: { chapter: ['第三章', '旋转之庭'], shots: [
+    [0, '断桥', '淡紫色庭院，十字石桥没有对上路', '等距全景'],
+    [.2, '转动机关', '她转动金色手柄，整座桥旋转 90°，接上新的路', '推近 · 回弹缓动'],
+    [.58, '过桥', '她走过新接上的桥，来到拱门前', '横移跟拍'],
+    [.86, '入夜', '拱门亮起，她走进夜色', '暗场转场'] ] },
+  v2:     { chapter: ['第四章', '夜之水阶'], shots: [
+    [0, '夜海', '星空与水面，一根石柱托着她', '低俯角（26°）'],
+    [.12, '一句一阶', '每唱一句，前方升起一根石柱，她跳过去', '侧向跟拍 · 石柱升起带涟漪'],
+    [.68, '远方的人', '远处高柱上，「你」提着灯，始终够不到', '横摇至远处'],
+    [.86, '沉没', '那根柱子沉进水里，灯飘向夜空', '定镜 · 涟漪扩散'] ] },
+  c2:     { chapter: null, shots: [
+    [0, '黄昏回廊', '又回到回廊，天色变成黄昏，她走得更快', '等距锁定 · 更大的节拍缩放'],
+    [.45, '越走越快', '倾斜加剧，原地打转的徒劳感', '荷兰角 ±6° + 推拉'],
+    [.85, '停步', '她停下来，抬头', '缓慢拉远'] ] },
+  bridge: { chapter: ['第五章', '换一个角度'], shots: [
+    [0, '错觉', '仍是完美闭合的回廊', '等距视角'],
+    [.15, '破绽', '镜头绕离那个「唯一正确」的角度——回廊断开了，原来从来没有相连', '环绕运镜 45°→100° · 俯角降低'],
+    [.5, '承认', '她坐在断口边缘，帽子低垂；颜色褪去，开始下雨', '缓推至近景 · 荷兰角'],
+    [.85, '寂静', '碎块悬浮，画面渐亮', '定镜 → 暖白转场'] ] },
+  c3:     { chapter: ['第六章', '自由之阶'], shots: [
+    [0, '日出', '金色晨光，云海之上只剩一块碎片', '等距全景'],
+    [.08, '一句一阶', '每唱一句，一根石柱从云海升起，组成真正相连的台阶', '跟拍上升'],
+    [.6, '放手', '山顶的「你」向她点头，化作一群白鸟飞走', '中景 → 鸟群'],
+    [.84, '登顶', '她独自登顶，站在拱门前', '缓推'] ] },
+  outro:  { chapter: null, shots: [
+    [0, '远眺', '镜头拉远升高，云上的纪念碑全貌', '大幅拉远 + 升高'],
+    [.4, '片尾', '「有些路，只在某个角度才相连。」', '定格 + 片尾字'] ] },
+};
+
+// ============================================================
+// 每一段的「导演」函数：给定时间，摆好角色、机关与相机
+// ============================================================
+const lineIdx = (lines, t) => { let j = -1; for (let i = 0; i < lines.length; i++) if (lines[i].t <= t) j = i; return j; };
+const breath = (lines, t, dur = .7) => { const j = lineIdx(lines, t); if (j < 0) return 0; const d = t - lines[j].t; return d < dur ? Math.sin(Math.PI * d / dur) : 0; };
+const keyPulse = (lines, t, re, dur = 1.6) => { let v = 0; for (const l of lines) if (re.test(l.text) && t >= l.t && t < l.t + dur) v = Math.max(v, 1 - (t - l.t) / dur); return v; };
+
+const ACT = {
+  intro(c) {
+    const { u, t, sec } = c; A.g.visible = true; driftClouds(A.clouds, t);
+    pose(ida, A.start, Math.PI / 4);
+    const leaveT = sec.start + .72 * c.dur;
+    const yd = Math.max(0, t - leaveT) * 1.0;
+    const yp = A.youPath.at(yd);
+    pose(you, yp.pos, yd > 0 ? yp.yaw : Math.PI / 4, { walk: yd > 0 ? yd / STEP : null });
+    const cam = kf(u, [
+      [0, { tx: .5, ty: 19, tz: .5, size: 6.5, az: 38, el: ISO_EL }],
+      [.36, { tx: .5, ty: 18.5, tz: .5, size: 6.2, az: 45, el: ISO_EL }],
+      [.74, { tx: .9, ty: 10.7, tz: .9, size: 3.1, az: 45, el: ISO_EL }],
+      [1, { tx: .75, ty: 10.55, tz: 1.25, size: 2.5, az: 45, el: ISO_EL }]]);
+    return { cam: { ...cam, roll: 0 }, pal: PAL.dawn };
+  },
+  v1(c) {
+    const { t, sec, dur } = c; A.g.visible = true; driftClouds(A.clouds, t);
+    const walkStart = sec.start + .4, arrive = sec.start + dur * .84;
+    const speed = A.idaPath.len / Math.max(4, arrive - walkStart);
+    const d = clamp((t - walkStart) * speed, 0, A.idaPath.len);
+    const p = A.idaPath.at(d);
+    let pos = p.pos, yaw = p.yaw, walk = d > 0 && d < A.idaPath.len ? d / STEP : null, op = 1;
+    const doorK = smooth(arrive + .3, arrive + 2.2, t);
+    if (t > arrive) {
+      yaw = Math.PI;
+      pos = pos.clone().lerp(A.doorPos, smooth(arrive + .5, arrive + 2.0, t));
+      walk = t < arrive + 2 ? (t - arrive) * 3.2 : null;
+      op = 1 - smooth(arrive + 1.5, arrive + 2.4, t);
+    }
+    pose(ida, pos, yaw, { walk, opacity: op });
+    A.glow.uniforms.opacity.value = doorK * .85;
+    // 「你」先走一步，然后消失在塔后
+    const intro = TL.by.intro, yd = t - (intro.start + .72 * (intro.end - intro.start));
+    const yp = A.youPath.at(yd);
+    pose(you, yp.pos, yp.yaw, { walk: yd / STEP, opacity: 1 - smooth(sec.start + 2, sec.start + 5, t) });
+    // 每句一个脚印光点 + 幽灵回声
+    const pathCell = dist => { const st = A.idaPath.at(dist); return clamp(Math.floor((st.i - 2) / 2), 0, 39); };
+    A.feet.forEach(f => f.material.uniforms.opacity.value = 0);
+    let gl = null;
+    for (const l of sec.lines) {
+      if (l.t > t) break;
+      const k = pathCell(clamp((l.t - walkStart) * speed, 0, A.idaPath.len));
+      const age = t - l.t;
+      A.feet[k].material.uniforms.opacity.value = Math.max(A.feet[k].material.uniforms.opacity.value, .4 + .6 * Math.exp(-age * .9));
+      gl = { l, k };
+    }
+    if (gl && gl.l.li % 2 === 1) {
+      const age = t - gl.l.t, k = Math.min(gl.k + 4, 39), [x, y, z] = A.cells[k];
+      const nxt = A.cells[Math.max(k - 1, 0)];
+      pose(ghost, V(x, y, z), Math.atan2(nxt[0] - x, nxt[2] - z), { opacity: .5 * bell(age, 0, 3) });
+    }
+    // 机位：随她绕塔环绕
+    const raw = Math.atan2(pos.x, pos.z) * 180 / Math.PI;
+    const expected = 121 - 18 * pathCell(d);
+    const ang = raw + 360 * Math.round((expected - raw) / 360);
+    const onStairs = smooth(2.5, 5, d);
+    const tgt = V(pos.x * .5, pos.y + .7, pos.z * .5);
+    const az = lerp(45, ang + 14, onStairs);
+    const base = kf(c.u, [[0, { size: 3.0 }], [.12, { size: 4.6 }], [.3, { size: 3.4 }], [.6, { size: 2.9 }], [.84, { size: 2.6 }], [1, { size: 1.9 }]]);
+    const near = smooth(.84, 1, c.u);
+    const target = tgt.lerp(V(A.doorPos.x, A.doorPos.y + .6, A.doorPos.z), near);
+    return { cam: camOf(target, { az: lerp(az, 20, near), el: lerp(ISO_EL, 24, onStairs), size: base.size * (1 - .035 * breath(sec.lines, t)) }), pal: PAL.dawn };
+  },
+  c1(c) { return loopAct(c, { speed: 1.25, roll: 4, pal: PAL.loop, sky: PAL.loop.sky }); },
+  c2(c) { return loopAct(c, { speed: 1.55, roll: 6, pal: PAL.loop, sky: PAL.dusk.sky, text: PAL.dusk.text, stop: true }); },
+  inter1(c) {
+    const { u, t, sec, dur } = c; C.g.visible = true;
+    const rot = ease.inOutBack(smooth(.22, .56, u)) * Math.PI / 2;
+    C.bridge.rotation.y = rot; C.wheel.rotation.y = rot * 4;
+    let pos, yaw, walk = null, op = 1;
+    if (u < .2) { const d = C.inPath.len * ease.inOut(u / .2); const p = C.inPath.at(d); pos = p.pos; yaw = p.yaw; walk = u < .2 ? d / STEP : null; }
+    else if (u < .58) { pos = C.inPath.at(C.inPath.len).pos; yaw = Math.atan2(-.4, .6) + Math.sin(rot * 4) * .15; }
+    else {
+      const k = clamp((u - .58) / .28), d = C.outPath.len * ease.inOut(k), p = C.outPath.at(d);
+      pos = p.pos; yaw = k >= 1 ? Math.PI : p.yaw; walk = k < 1 ? d / STEP : null;
+      if (u > .88) { pos = pos.clone().add(V(0, 0, -.25 * smooth(.88, .95, u))); op = 1 - smooth(.9, .97, u); walk = u < .95 ? (u - .88) * dur * 3 : null; }
+    }
+    pose(ida, pos, yaw, { walk, opacity: op });
+    C.glow.uniforms.opacity.value = smooth(.84, .95, u) * .9;
+    driftClouds(C.clouds, t);
+    const cam = kf(u, [
+      [0, { tx: 1.6, ty: -.3, tz: -2.2, size: 5.6, az: 45 }],
+      [.2, { tx: .2, ty: 0, tz: -.6, size: 3.6, az: 45 }],
+      [.4, { tx: .6, ty: 0, tz: -.2, size: 3.3, az: 52 }],
+      [.58, { tx: 1.8, ty: 0, tz: -.3, size: 4.6, az: 45 }],
+      [.86, { tx: 4.6, ty: .5, tz: -.3, size: 3.2, az: 45 }],
+      [1, { tx: 5, ty: .7, tz: -.6, size: 2.2, az: 45 }]]);
+    return { cam: { ...cam, el: ISO_EL, roll: 0 }, pal: PAL.court };
+  },
+  v2(c) {
+    const { u, t, sec, dur } = c; D.g.visible = true;
+    const lines = sec.lines.slice(0, D.n);
+    const rise = k => k === 0 ? -1e9 : (lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.1 + .55 * k / D.n));
+    let at = 0;
+    for (let k = 0; k <= D.n; k++) {
+      const rt = rise(k), kk = smooth(rt, rt + .9, t);
+      D.pillars[k].position.y = k === 0 ? 0 : lerp(-4.8, 0, ease.outBack(clamp((t - rt) / .9)) * (t > rt ? 1 : 0));
+      D.rm[k].uniforms.opacity.value = k ? .7 * (1 - smooth(rt, rt + 2.6, t)) * (t > rt ? 1 : 0) : 0;
+      D.ripples[k].scale.setScalar(.6 + 2.6 * smooth(rt, rt + 2.6, t));
+      if (t >= rt + 1.0 && kk >= 1) at = k;
+    }
+    const top = k => V(k * 1.6, .55, -k * 1.6);
+    let pos = top(at), walk = null;
+    const hopT = rise(at + 1) + 1.0;
+    if (at < D.n && t > hopT) {
+      const k = clamp((t - hopT) / .6); pos = top(at).lerp(top(at + 1), ease.inOut(k)); pos.y += Math.sin(Math.PI * k) * .7;
+      walk = k < 1 ? k * 4 : null;
+    }
+    pose(ida, pos, Math.atan2(1, -1), { walk });
+    // 远方的「你」与灯
+    const sink = smooth(.86, .98, u);
+    D.farG.position.y = -6.5 * ease.inOut(sink);
+    const fp = V(D.far, 1.7 + D.farG.position.y, -D.far);
+    pose(you, fp, Math.atan2(-1, 1), { opacity: 1 - smooth(.9, .97, u) });
+    const lantern = V(D.far + .22, lerp(fp.y + .45, 2.2 + 5 * smooth(.86, 1, u), sink), -D.far + .22);
+    D.lantern.position.copy(lantern); D.halo.position.copy(lantern);
+    D.halo.scale.setScalar(.32 + .05 * Math.sin(t * 3));
+    D.fr.uniforms.opacity.value = .7 * bell(u, .86, 1); D.farRipple.scale.setScalar(1 + 3 * smooth(.86, 1, u));
+    const follow = pos.clone().add(V(.9, .4, -.9));
+    const look = V(D.far, 1.6, -D.far);
+    const k2 = smooth(.66, .8, u), k3 = smooth(.82, .9, u);
+    const tgt = follow.clone().lerp(follow.clone().lerp(look, .55), k2).lerp(look, k3);
+    const size = lerp(lerp(lerp(4.6, 3.4, smooth(0, .12, u)), 5.2, k2), 3.6, k3) * (1 - .03 * breath(lines, t));
+    return { cam: camOf(tgt, { el: 26, size }), pal: PAL.night, night: true };
+  },
+  bridge(c) {
+    const { u, t, sec, dur } = c; B.g.visible = true;
+    // 她从副歌二停下的位置继续走到断口
+    const sEnd = loopEnd(), target = B.L - .55;
+    let dist = (target - (sEnd % B.L) + B.L) % B.L; if (dist < 3) dist += B.L;
+    const k = smooth(0, .42, u), d = (sEnd + dist * k) % B.L;
+    const p = B.path.at(d);
+    const drift = smooth(.28, .8, u);
+    B.halfB.position.set(.3 * drift, .8 * drift + Math.sin(t * .8) * .06 * drift, 1.5 * drift);
+    B.halfA.position.set(-.1 * drift, -.3 * drift, -.4 * drift);
+    const sit = smooth(.55, .66, u);
+    const pos = p.pos.clone().add(d > B.L * .5 ? B.halfB.position : B.halfA.position);
+    pose(ida, pos, k < 1 ? p.yaw : p.yaw, { walk: k > 0 && k < 1 ? (sEnd + dist * k) / STEP : null, sit, dip: sit });
+    U.desat.value = smooth(.2, .6, u) * .72;
+    const cam = kf(u, [
+      [0, { tx: B.center.x, ty: B.center.y, tz: B.center.z, size: 5.2, az: 45, el: ISO_EL, roll: 0 }],
+      [.15, { tx: B.center.x, ty: B.center.y, tz: B.center.z, size: 5.4, az: 45, el: ISO_EL, roll: 0 }],
+      [.5, { tx: B.center.x, ty: B.center.y + .6, tz: B.center.z + .5, size: 6.2, az: 100, el: 16, roll: 0 }],
+      [.85, { tx: pos.x, ty: pos.y + .4, tz: pos.z - .6, size: 2.5, az: 78, el: 16, roll: -4 }],
+      [1, { tx: pos.x, ty: pos.y + .45, tz: pos.z - .6, size: 2.3, az: 74, el: 16, roll: -4 }]]);
+    const sky = [0, 1].map(i => mixHex(PAL.loop.sky[i], PAL.grey.sky[i], smooth(.2, .6, u)));
+    return { cam, pal: PAL.loop, sky, text: PAL.grey.text, rain: smooth(.45, .6, u) * (1 - smooth(.92, 1, u)) };
+  },
+  c3(c) {
+    const { u, t, sec, dur } = c; E.g.visible = true; driftClouds(E.clouds, t);
+    const lines = sec.lines.slice(0, E.n);
+    const rise = k => k === 0 ? -1e9 : (lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.06 + .62 * k / E.n));
+    let at = 0;
+    for (let k = 0; k <= E.n; k++) {
+      const rt = rise(k);
+      E.steps[k].position.y = k === 0 ? 0 : (t < rt ? -18 : lerp(-18, 0, ease.outBack(clamp((t - rt) / 1.1))));
+      if (t >= rt + 1.1) at = k;
+    }
+    const release = (lines.find(l => /自由|飞/.test(l.text)) || {}).t ?? sec.start + dur * .6;
+    const summitT = Math.max(rise(E.n) + 2.2, release + 1.6);
+    let pos = E.pos[at].clone(), walk = null, yaw = Math.atan2(1, -1);
+    const climbT = rise(at + 1) + 1.1;
+    if (at < E.n && t > climbT) { const k = clamp((t - climbT) / .55); pos.lerp(E.pos[at + 1], ease.inOut(k)); walk = k * 2.5; yaw = Math.atan2(E.pos[at + 1].x - E.pos[at].x, E.pos[at + 1].z - E.pos[at].z); }
+    const sp = E.summit.clone().add(V(0, 0, .45));
+    if (at === E.n && t > summitT) {
+      const k = clamp((t - summitT) / 1.6);
+      const p2 = new Path([E.pos[E.n], sp]); const q = p2.at(p2.len * ease.inOut(k));
+      pos = q.pos; walk = k < 1 ? k * p2.len / STEP : null; yaw = k < 1 ? q.yaw : Math.PI;
+    }
+    pose(ida, pos, yaw, { walk });
+    const youPos = E.summit.clone().add(V(.15, 0, -.25)), pn = E.pos[E.n];
+    pose(you, youPos, Math.atan2(pn.x - youPos.x, pn.z - youPos.z), { opacity: 1 - smooth(release, release + 1.2, t), dip: bell(t, release - 2, release) * .4 });
+    E.debris.forEach(o => { o.dg.position.y = o.y0 + Math.sin(t * .4 + o.ph) * .25; });
+    const follow = pos.clone().add(V(.6, .6, -.6));
+    const look = youPos.clone().add(V(0, .9, 0));
+    const kL = bell(t, release - 3, release + 3.5);
+    const tgt = follow.clone().lerp(look, kL);
+    const size = lerp(lerp(5.2, 4.0, smooth(0, .1, u)), 3.2, kL) * (1 - .03 * breath(lines, t));
+    return { cam: camOf(tgt, { size, el: lerp(ISO_EL, 26, kL) }), pal: PAL.gold, sun: lerp(.6, .3, u), birds: { at: release, from: youPos } };
+  },
+  outro(c) {
+    const { u, t } = c; E.g.visible = true; driftClouds(E.clouds, t);
+    for (let k = 0; k <= E.n; k++) E.steps[k].position.y = 0;
+    pose(ida, E.summit.clone().add(V(0, 0, .45)), Math.PI);
+    you.visible = false;
+    E.debris.forEach(o => { o.dg.position.y = o.y0 + Math.sin(t * .4 + o.ph) * .25; });
+    const s = E.summit;
+    const cam = kf(u, [
+      [0, { tx: s.x, ty: s.y + 1, tz: s.z, size: 3.0, az: 45, el: ISO_EL }],
+      [.7, { tx: s.x - E.n * .2, ty: s.y + 3.5, tz: s.z + E.n * .2, size: 9.5, az: 38, el: 30 }],
+      [1, { tx: s.x - E.n * .2, ty: s.y + 4, tz: s.z + E.n * .2, size: 10.5, az: 36, el: 30 }]]);
+    const c3 = TL.by.c3, release = (c3.lines.find(l => /自由|飞/.test(l.text)) || {}).t ?? c3.start + (c3.end - c3.start) * .6;
+    return { cam: { ...cam, roll: 0 }, pal: PAL.gold, sun: .28, birds: { at: release, from: E.summit.clone().add(V(.15, 0, -.25)), orbit: true }, end: smooth(.35, .5, u) };
+  },
+};
+// 回廊段：c1 / c2 共用
+function loopS(c, speed, stop) {
+  const t = c.t - c.sec.start;
+  if (!stop) return t * speed;
+  const ts = c.dur * .86;
+  if (t < ts) return t * speed;
+  const k = clamp((t - ts) / (c.dur * .1));
+  return ts * speed + speed * c.dur * .1 * (k - k * k / 2);
+}
+function loopEnd() { const s = TL.by.c2; return loopS({ t: s.end, sec: s, dur: s.end - s.start }, 1.55, true); }
+function loopAct(c, o) {
+  const { u, t, sec } = c; B.g.visible = true;
+  B.halfA.position.set(0, 0, 0); B.halfB.position.set(0, 0, 0);
+  const d = loopS(c, o.speed, o.stop), p = B.path.at(d % B.L);
+  const moving = !o.stop || u < .95;
+  pose(ida, p.pos, p.yaw, { walk: moving ? d / STEP : null, dip: o.stop ? -smooth(.92, 1, u) * .2 : 0 });
+  // 幽灵：每三句出现一次，在她前方的高处
+  const j = lineIdx(sec.lines, t);
+  if (j >= 0 && j % 3 === 1) {
+    const age = t - sec.lines[j].t, gd = (d + B.L * .42) % B.L, gp = B.path.at(gd);
+    pose(ghost, gp.pos, gp.yaw + Math.PI, { opacity: .5 * bell(age, 0, 3.2) });
+  }
+  B.mats[0].uniforms.tintK.value = .22 * keyPulse(sec.lines, t, /难过/, 1.4);
+  const b = breath(sec.lines, t);
+  const follow = p.pos.clone().add(V(0, .5, 0));
+  const k = kf(u, [[0, { f: 0, size: 6.0, roll: 0 }], [.2, { f: .8, size: 3.0, roll: 0 }],
+    [.5, { f: .8, size: 2.7, roll: o.roll }], [.72, { f: .6, size: 3.3, roll: -o.roll * .7 }], [.86, { f: 0, size: 6.4, roll: 0 }], [1, { f: 0, size: 6.0, roll: 0 }]]);
+  const tgt = B.center.clone().lerp(follow, k.f);
+  return { cam: camOf(tgt, { size: k.size * (1 - .055 * b), roll: k.roll }), pal: o.pal, sky: o.sky, text: o.text };
+}
+function mixHex(a, b, k) { return '#' + new THREE.Color(a).lerp(new THREE.Color(b), k).getHexString(); }
+
+// ============================================================
+// 2D 合成：天空、日月星、鸟群、雨、字幕、章节卡、转场
+// ============================================================
+const FONT = '"Noto Serif SC", "Songti SC", "STSong", serif';
+const rnd = mulberry32(3);
+const STARS = Array.from({ length: 200 }, () => [rnd(), rnd() * .9, .8 + rnd() * 2.2, rnd() * 6]);
+const SPARK = Array.from({ length: 70 }, () => [rnd(), .3 + rnd() * .7, 8 + rnd() * 26, rnd() * 6]);
+const RAIN = Array.from({ length: 220 }, () => [rnd(), rnd(), .6 + rnd() * .8]);
+const BIRDS = Array.from({ length: 14 }, (_, i) => ({ a: rnd() * Math.PI * 2, v: .7 + rnd() * .6, r: .5 + rnd(), ph: rnd() * 6, s: .7 + rnd() * .6, i }));
+const CLOUD2D = Array.from({ length: 9 }, () => [rnd(), rnd(), .5 + rnd() * .8]);
+const VEIL = { 'v1>c1': '#FFF6EC', 'c1>inter1': '#FFF6EC', 'inter1>v2': '#141A3E', 'v2>c2': '#FBE3CF', 'bridge>c3': '#FFF7E6' };
+
+function project(v) { const p = v.clone().project(camera); return [(p.x + 1) / 2 * W, (1 - p.y) / 2 * H]; }
+function drawBird(x, y, s, flap, color) {
+  g2.shadowColor = 'rgba(110,70,60,.35)'; g2.shadowBlur = s * .4; g2.strokeStyle = color; g2.lineWidth = Math.max(1.5, s * .16); g2.lineCap = 'round';
+  g2.beginPath(); g2.moveTo(x - s, y - s * .35 * flap); g2.quadraticCurveTo(x - s * .4, y - s * .05, x, y);
+  g2.quadraticCurveTo(x + s * .4, y - s * .05, x + s, y - s * .35 * flap); g2.stroke();
+  g2.shadowBlur = 0;
+}
+function spacedText(txt, x, y, size, weight, color, spacing, alpha = 1, shadow = null) {
+  g2.save(); g2.globalAlpha = alpha; g2.font = `${weight} ${size}px ${FONT}`; g2.fillStyle = color;
+  g2.textAlign = 'center'; g2.textBaseline = 'middle';
+  if ('letterSpacing' in g2) g2.letterSpacing = `${spacing}px`;
+  if (shadow) { g2.shadowColor = shadow; g2.shadowBlur = size * .5; }
+  const w = g2.measureText(txt).width, maxW = W * .88;
+  if (w > maxW) { g2.font = `${weight} ${size * maxW / w}px ${FONT}`; }
+  g2.fillText(txt, x + spacing / 2, y); g2.restore();
+}
+function sectionAt(t) {
+  const s = TL.sections; for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].start) return s[i]; return s[0];
+}
+function shotAt(sec, u) { const sh = STORY[sec.key].shots; let r = sh[0]; for (const x of sh) if (u >= x[0]) r = x; return r; }
+
+function renderFrame(t) {
+  t = clamp(t, 0, TL.duration - 1e-3);
+  const sec = sectionAt(t), dur = sec.end - sec.start, u = clamp((t - sec.start) / dur);
+  for (const o of [A.g, B.g, C.g, D.g, E.g]) o.visible = false;
+  you.visible = ghost.visible = false; ghost.userData.mats.forEach(m => m.uniforms.opacity.value = 0);
+  U.desat.value = 0; B.mats[0].uniforms.tintK.value = 0;
+  pose(ghost, V(0, -99, 0), 0, { opacity: 0, visible: false });
+  const r = ACT[sec.key]({ t, u, sec, dur });
+  const pal = r.pal, sky = r.sky || pal.sky;
+  U.fogC.value.set(sky[1]); U.fogLo.value = pal.fogLo; U.fogHi.value = pal.fogHi;
+  setCam(r.cam);
+
+  // 天空
+  const grd = g2.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, sky[0]); grd.addColorStop(1, sky[1]);
+  g2.globalAlpha = 1; g2.fillStyle = grd; g2.fillRect(0, 0, W, H);
+  if (r.night) {
+    for (const [x, y, s, ph] of STARS) { g2.globalAlpha = .35 + .45 * (.5 + .5 * Math.sin(t * 1.3 + ph)); g2.fillStyle = '#FFF6E0'; g2.fillRect(x * W, y * H, s, s); }
+    g2.globalAlpha = 1;
+    const mx = W * (PORTRAIT ? .72 : .8), my = H * .17, mr = Math.min(W, H) * .055;
+    const mg = g2.createRadialGradient(mx, my, mr * .6, mx, my, mr * 4); mg.addColorStop(0, 'rgba(255,240,210,.35)'); mg.addColorStop(1, 'rgba(255,240,210,0)');
+    g2.fillStyle = mg; g2.fillRect(0, 0, W, H); g2.fillStyle = '#FFF3D6'; g2.beginPath(); g2.arc(mx, my, mr, 0, Math.PI * 2); g2.fill();
+  }
+  if (r.sun != null) {
+    const sx = W * (PORTRAIT ? .62 : .7), sy = H * r.sun, sr = Math.min(W, H) * .12;
+    const sg = g2.createRadialGradient(sx, sy, sr * .5, sx, sy, sr * 3.2); sg.addColorStop(0, 'rgba(255,236,200,.7)'); sg.addColorStop(1, 'rgba(255,236,200,0)');
+    g2.fillStyle = sg; g2.fillRect(0, 0, W, H); g2.fillStyle = '#FFF4DE'; g2.beginPath(); g2.arc(sx, sy, sr, 0, Math.PI * 2); g2.fill();
+  }
+  // 序章穿云
+  if (sec.key === 'intro') {
+    const k = smooth(.3, .78, u), a = bell(u, .3, .82);
+    for (const [x, y, s] of CLOUD2D) {
+      const cy = (y * 1.4 + .2 - k * 1.9) * H, cx = x * W, rr = s * W * .32;
+      const cg = g2.createRadialGradient(cx, cy, 0, cx, cy, rr); cg.addColorStop(0, `rgba(255,255,255,${.85 * a})`); cg.addColorStop(1, 'rgba(255,255,255,0)');
+      g2.fillStyle = cg; g2.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);
+    }
+  }
+  renderer.render(scene, camera);
+  g2.globalAlpha = 1; g2.drawImage(renderer.domElement, 0, 0);
+  if (r.night) {   // 水面的碎光
+    g2.fillStyle = '#B9C8FF';
+    for (const [x, y, w, ph] of SPARK) { g2.globalAlpha = .18 * Math.max(0, Math.sin(t * 1.7 + ph)); g2.fillRect(x * W, y * H, w * W / 1920, 2); }
+    g2.globalAlpha = 1;
+  }
+
+  // 鸟群：「你」化作白鸟
+  if (r.birds && t > r.birds.at) {
+    const [bx, by] = project(r.birds.from.clone().add(V(0, .5, 0)));
+    const age = t - r.birds.at, unit = Math.min(W, H);
+    for (const b of BIRDS) {
+      let x, y, a;
+      if (r.birds.orbit) {
+        const cx = W * (PORTRAIT ? .62 : .7), cy = H * .28;
+        const ang = b.a + t * .25 * b.v;
+        x = cx + Math.cos(ang) * unit * (.16 + .08 * b.r); y = cy + Math.sin(ang) * unit * (.07 + .03 * b.r); a = .9;
+      } else {
+        const k = age * b.v;
+        x = bx + Math.cos(b.a) * unit * .05 * k + unit * .09 * k * k * .3 + Math.sin(k * 2 + b.ph) * unit * .02;
+        y = by - unit * .1 * k - Math.sin(b.a) * unit * .03 * k;
+        a = smooth(0, .3, age) * (1 - smooth(5, 8, age));
+      }
+      g2.globalAlpha = a;
+      drawBird(x, y, unit * .026 * b.s, Math.sin(t * 9 * b.v + b.ph), '#FFFFFF');
+    }
+    g2.globalAlpha = 1;
+  }
+  // 关键词：歌词里出现「飞/自由/鸟」时掠过一群小鸟
+  const cur = TL.lines[lineIdx(TL.lines, t)];
+  if (cur && /飞|自由|鸟|翅膀/.test(cur.text) && sec.key !== 'c3' && sec.key !== 'outro') {
+    const k = (t - cur.t) / 4.5;
+    if (k < 1) for (let i = 0; i < 7; i++) {
+      g2.globalAlpha = bell(k, 0, 1) * .9;
+      drawBird(W * (-.1 + k * 1.2) + i * W * .035, H * (.2 + .03 * Math.sin(i * 2.1)) + i * H * .012, Math.min(W, H) * .012, Math.sin(t * 10 + i), r.night ? '#F4EBDD' : '#FFFFFF');
+    }
+    g2.globalAlpha = 1;
+  }
+  // 雨：桥段，或歌词里出现「雨/泪/哭」
+  let rain = r.rain || 0;
+  if (cur && /雨|泪|哭/.test(cur.text) && t < cur.end) rain = Math.max(rain, .6);
+  if (rain > 0) {
+    g2.strokeStyle = 'rgba(235,238,248,.55)'; g2.lineWidth = 1.4; g2.globalAlpha = rain; g2.beginPath();
+    for (const [x, y, s] of RAIN) {
+      const px = ((x + t * .05 * s) % 1) * W * 1.1 - W * .05, py = ((y + t * .9 * s) % 1) * H;
+      g2.moveTo(px, py); g2.lineTo(px - H * .008, py + H * .045 * s);
+    }
+    g2.stroke(); g2.globalAlpha = 1;
+  }
+  // 「笑/光」→ 暖光
+  if (cur && /笑|阳光|光|晴/.test(cur.text)) {
+    const a = .22 * bell(t, cur.t, cur.t + 2.2);
+    const lg = g2.createRadialGradient(W * .7, H * .25, 0, W * .7, H * .25, W * .8); lg.addColorStop(0, `rgba(255,236,190,${a})`); lg.addColorStop(1, 'rgba(255,236,190,0)');
+    g2.fillStyle = lg; g2.fillRect(0, 0, W, H);
+  }
+  // 暗角
+  const vg = g2.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .45, W / 2, H / 2, Math.max(W, H) * .78);
+  vg.addColorStop(0, 'rgba(30,20,40,0)'); vg.addColorStop(1, 'rgba(30,20,40,.16)'); g2.fillStyle = vg; g2.fillRect(0, 0, W, H);
+  // 转场幕
+  const idx = TL.sections.indexOf(sec);
+  for (const j of [idx, idx + 1]) {
+    const s = TL.sections[j], p = TL.sections[j - 1]; if (!s || !p) continue;
+    const col = VEIL[`${p.key}>${s.key}`]; if (!col) continue;
+    const a = 1 - smooth(0, .65, Math.abs(t - s.start));
+    if (a > 0) { g2.globalAlpha = a; g2.fillStyle = col; g2.fillRect(0, 0, W, H); g2.globalAlpha = 1; }
+  }
+  const textC = r.text || pal.text, shadowC = r.night ? 'rgba(0,0,0,.45)' : 'rgba(255,250,244,.75)';
+  const unit = PORTRAIT ? W : H;
+  // 片名
+  if (sec.key === 'intro') {
+    const a = bell(u, .06, .4);
+    if (a > 0) {
+      spacedText('我不难过', W / 2, H * .42, unit * .085, 300, textC, unit * .045, a, shadowC);
+      spacedText('孙燕姿', W / 2, H * .42 + unit * .1, unit * .032, 500, textC, unit * .02, a * .9, shadowC);
+      spacedText('纪念碑谷风格 · 同人 MV', W / 2, H * .42 + unit * .16, unit * .022, 300, textC, unit * .012, a * .75, shadowC);
+    }
+  }
+  // 章节卡
+  const ch = STORY[sec.key].chapter;
+  if (ch) {
+    const a = bell(t - sec.start, .5, Math.min(4.8, dur * .6));
+    if (a > 0) {
+      const y = H * (PORTRAIT ? .14 : .13);
+      spacedText(ch[0], W / 2, y, unit * .02, 300, textC, unit * .016, a * .85, shadowC);
+      spacedText(ch[1], W / 2, y + unit * .052, unit * .042, 500, textC, unit * .022, a, shadowC);
+      g2.save(); g2.globalAlpha = a * .5; g2.strokeStyle = textC; g2.lineWidth = 1;
+      g2.beginPath(); g2.moveTo(W / 2 - unit * .05, y + unit * .025); g2.lineTo(W / 2 + unit * .05, y + unit * .025); g2.stroke(); g2.restore();
+    }
+  }
+  // 歌词
+  if (cur && cur.text && t < cur.end + .4) {
+    const age = t - cur.t, a = smooth(0, .35, age) * (1 - smooth(cur.end - .05, cur.end + .4, t));
+    const sp = lerp(unit * .02, unit * .008, ease.out(clamp(age / .6)));
+    const ly = H * (PORTRAIT ? .8 : .86), bh = unit * .075, rgb = r.night ? '14,18,48' : '255,248,240';
+    const band = g2.createLinearGradient(0, ly - bh, 0, ly + bh);
+    band.addColorStop(0, `rgba(${rgb},0)`); band.addColorStop(.5, `rgba(${rgb},${.5 * a})`); band.addColorStop(1, `rgba(${rgb},0)`);
+    g2.fillStyle = band; g2.fillRect(0, ly - bh, W, bh * 2);
+    spacedText(cur.text, W / 2, ly, unit * (PORTRAIT ? .05 : .042), 500, textC, sp, a, shadowC);
+  }
+  // 片尾
+  if (r.end) {
+    g2.globalAlpha = r.end * .35; g2.fillStyle = '#FFF6E8'; g2.fillRect(0, 0, W, H); g2.globalAlpha = 1;
+    const y0 = H * .36;
+    spacedText('有些路，', W / 2, y0, unit * .05, 300, PAL.gold.text, unit * .02, r.end, shadowC);
+    spacedText('只在某个角度才相连。', W / 2, y0 + unit * .085, unit * .05, 300, PAL.gold.text, unit * .02, r.end, shadowC);
+    const a2 = r.end * smooth(.55, .7, u);
+    const credits = ['《我不难过》　演唱：孙燕姿', ...TL.credits.slice(0, 3), '画风致敬《纪念碑谷》(ustwo games) · 同人作品，仅供学习交流'];
+    credits.forEach((s, i) => spacedText(s, W / 2, y0 + unit * (.21 + i * .042), unit * .02, 300, PAL.gold.text, unit * .008, a2 * .85, shadowC));
+  }
+  return { sec, u, shot: shotAt(sec, u) };
+}
+
+// ============================================================
+// 播放、拖放、录制
+// ============================================================
+const $ = id => document.getElementById(id);
+const audio = $('audio');
+let parsed = null, playing = false, clock0 = 0, tBase = 0, curT = CONFIG.freezeAt ?? 0;
+let audioDur = null;
+setTimeline(null, null);
+
+const nowT = () => audio.src && audioDur ? audio.currentTime
+  : playing ? tBase + (performance.now() - clock0) / 1000 : curT;
+function seek(t) { curT = t; tBase = t; clock0 = performance.now(); if (audio.src && audioDur) audio.currentTime = t; }
+async function play() {
+  if (audio.src && audioDur) await audio.play(); else { tBase = curT; clock0 = performance.now(); }
+  playing = true; $('bPlay').textContent = '❚❚ 暂停';
+}
+function pause() { if (audio.src) audio.pause(); curT = nowT(); playing = false; $('bPlay').textContent = '▶ 播放'; }
+async function loadFonts(text) {
+  try { await Promise.all([300, 500].map(w => document.fonts.load(`${w} 40px "Noto Serif SC"`, text))); } catch (e) { /* 字体加载失败时用系统宋体 */ }
+}
+const BASE_TEXT = '我不难过孙燕姿纪念碑谷风格同人第一二三四五六章回声之塔的回廊旋转庭夜水阶换个角度自由有些路只在某才相连。，《》演唱画致敬仅供学习交流作品';
+async function loadLRC(text) {
+  parsed = parseLRC(text);
+  await loadFonts(BASE_TEXT + parsed.lines.map(l => l.text).join('') + parsed.credits.join(''));
+  setTimeline(parsed, audioDur);
+}
+function setDuration(d) { audioDur = d; setTimeline(parsed, d); }
+async function handleFile(f) {
+  if (!f) return;
+  if (/\.(lrc|txt)$/i.test(f.name)) return loadLRC(await f.text());
+  audio.src = URL.createObjectURL(f);
+  audio.onloadedmetadata = () => setDuration(audio.duration);
+}
+$('fAudio').onchange = e => handleFile(e.target.files[0]);
+$('fLrc').onchange = e => handleFile(e.target.files[0]);
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => { e.preventDefault(); [...e.dataTransfer.files].forEach(handleFile); });
+$('bPlay').onclick = () => playing ? pause() : play();
+$('seek').oninput = e => seek(Number(e.target.value));
+$('sAr').value = CONFIG.aspect;
+$('sAr').onchange = e => { params.set('ar', e.target.value); location.search = params.toString(); };
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); }
+  if (e.key === 'h' || e.key === 'H') { $('ui').classList.toggle('hidden'); $('hint').classList.toggle('hidden'); }
+});
+audio.onended = () => pause();
+
+// 分镜表
+function renderBoard() {
+  const el = $('board'); el.innerHTML = `<div style="color:var(--muted);font-size:12px">段落来源：${TL.mode}${TL.has ? '' : '（未载入歌词，使用示意时间）'}</div>`;
+  for (const s of TL.sections) {
+    const st = STORY[s.key], d = s.end - s.start;
+    const h = document.createElement('h3');
+    h.textContent = `${SEC_NAME[s.key]}${st.chapter ? ' · ' + st.chapter.join(' ') : ''}　${fmt(s.start)}–${fmt(s.end)}`;
+    el.appendChild(h);
+    for (const [u, name, desc, cam] of st.shots) {
+      const div = document.createElement('div'); div.className = 'shot';
+      div.innerHTML = `<span class="t">${fmt(s.start + u * d)}</span><b>${name}</b><small>${desc}</small><small>🎥 ${cam}</small>`;
+      div.onclick = () => seek(s.start + u * d + .01);
+      el.appendChild(div);
+    }
+  }
+}
+window.addEventListener('timeline', () => { $('seek').max = TL.duration; renderBoard(); });
+renderBoard(); $('seek').max = TL.duration;
+$('bBoard').onclick = () => $('board').classList.toggle('open');
+
+// 录制（实时）：画布 + 音乐 → 视频文件
+let recorder = null, actx = null, aDest = null;
+$('bRec').onclick = async () => {
+  if (recorder) { recorder.stop(); return; }
+  const stream = out.captureStream(30);
+  if (audio.src) {
+    if (!actx) { actx = new AudioContext(); const src = actx.createMediaElementSource(audio); aDest = actx.createMediaStreamDestination(); src.connect(aDest); src.connect(actx.destination); }
+    await actx.resume(); stream.addTrack(aDest.stream.getAudioTracks()[0]);
+  }
+  const mime = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+  const chunks = []; recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16e6 });
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(chunks, { type: mime }));
+    a.download = `我不难过-纪念碑谷MV.${mime.includes('mp4') ? 'mp4' : 'webm'}`; a.click();
+    recorder = null; $('bRec').textContent = '● 录制视频'; pause();
+  };
+  seek(0); recorder.start(1000); $('bRec').textContent = '■ 停止录制'; await play();
+  audio.addEventListener('ended', () => recorder && recorder.stop(), { once: true });
+  if (!audio.src) setTimeout(() => recorder && recorder.stop(), TL.duration * 1000);
+};
+
+// 主循环
+function loop() {
+  const t = nowT(); if (!audio.src && playing && t >= TL.duration) pause();
+  const info = renderFrame(t);
+  $('seek').value = t; $('time').textContent = `${fmt(t)} / ${fmt(TL.duration)}`;
+  $('shot').textContent = `${SEC_NAME[info.sec.key]} · ${info.shot[1]} —— ${info.shot[2]}　🎥 ${info.shot[3]}`;
+  requestAnimationFrame(loop);
+}
+
+// 给 render.mjs 用的离线接口
+window.MV = {
+  ready: loadFonts(BASE_TEXT),
+  loadLRC, setDuration,
+  renderFrame: t => { renderFrame(t); return true; },
+  timeline: () => ({ duration: TL.duration, mode: TL.mode, sections: TL.sections.map(s => ({ key: s.key, start: s.start, end: s.end, lines: s.lines.length })) }),
+};
+if (CONFIG.renderMode) document.body.classList.add('render');
+if (CONFIG.renderMode || CONFIG.freezeAt != null) { window.MV.ready.then(() => { renderFrame(curT); document.body.dataset.ready = '1'; }); }
+else loop();
+</script>
+</body>
+</html>
