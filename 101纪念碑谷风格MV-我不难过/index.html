@@ -106,18 +106,26 @@ const ease = {
 const bell = (x, a, b) => smooth(a, a + (b - a) * .3, x) * (1 - smooth(b - (b - a) * .3, b, x));
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
   t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-// 关键帧插值：keys = [[u, {字段}], ...]
-function kf(u, keys, e = ease.inOut) {
-  if (u <= keys[0][0]) return { ...keys[0][1] };
-  for (let i = 0; i < keys.length - 1; i++) {
-    const [u0, a] = keys[i], [u1, b] = keys[i + 1];
-    if (u <= u1) {
-      const k = e(clamp((u - u0) / (u1 - u0))), o = { ...a };
-      for (const key in b) o[key] = key in a ? lerp(a[key], b[key], k) : b[key];
-      return o;
-    }
+// 关键帧插值：单调三次样条（Fritsch–Carlson）。镜头穿过中间关键帧时不减速、不过冲，
+// 只在首尾自然缓入缓出 —— 避免「每个关键帧都停一下」的顿挫感
+function kf(u, keys) {
+  const n = keys.length, xs = keys.map(k => k[0]);
+  if (u <= xs[0]) return { ...keys[0][1] };
+  if (u >= xs[n - 1]) return { ...keys[n - 1][1] };
+  let i = 0; while (u > xs[i + 1]) i++;
+  const h = xs[i + 1] - xs[i], s = (u - xs[i]) / h, s2 = s * s, s3 = s2 * s;
+  const o = {};
+  for (const f in keys[0][1]) {
+    const ys = keys.map(k => k[1][f]);
+    const d = j => (ys[j + 1] - ys[j]) / (xs[j + 1] - xs[j]);
+    const m = j => {
+      if (j === 0 || j === n - 1 || d(j - 1) * d(j) <= 0) return 0;
+      const h0 = xs[j] - xs[j - 1], h1 = xs[j + 1] - xs[j];
+      return 3 * (h0 + h1) / ((2 * h1 + h0) / d(j - 1) + (h1 + 2 * h0) / d(j));
+    };
+    o[f] = (2 * s3 - 3 * s2 + 1) * ys[i] + (s3 - 2 * s2 + s) * h * m(i) + (-2 * s3 + 3 * s2) * ys[i + 1] + (s3 - s2) * h * m(i + 1);
   }
-  return { ...keys[keys.length - 1][1] };
+  return o;
 }
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -138,6 +146,11 @@ class Path {
     const k = (d - this.cum[i - 1]) / seg;
     const dir = b.clone().sub(a);
     return { pos: a.clone().lerp(b, k), yaw: Math.atan2(dir.x, dir.z), i: i - 1 };
+  }
+  // 平滑朝向：取前后两点的连线方向，拐角处自然转身而不是瞬间掉头
+  dirAt(d, w = .3) {
+    const a = this.at(d - w).pos, b = this.at(d + w).pos, dx = b.x - a.x, dz = b.z - a.z;
+    return dx * dx + dz * dz > 1e-8 ? Math.atan2(dx, dz) : this.at(d).yaw;
   }
 }
 
@@ -228,6 +241,7 @@ function setCam(c) {
   const s = c.size * SIZE_MUL, a = W / H;
   camera.left = -s * a; camera.right = s * a; camera.top = s; camera.bottom = -s;
   camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
 }
 const camOf = (t, o = {}) => ({ tx: t.x, ty: t.y, tz: t.z, az: 45, el: ISO_EL, size: 4, roll: 0, ...o });
 
@@ -654,17 +668,93 @@ const STORY = {
 // 每一段的「导演」函数：给定时间，摆好角色、机关与相机
 // ============================================================
 const lineIdx = (lines, t) => { let j = -1; for (let i = 0; i < lines.length; i++) if (lines[i].t <= t) j = i; return j; };
-const breath = (lines, t, dur = .7) => { const j = lineIdx(lines, t); if (j < 0) return 0; const d = t - lines[j].t; return d < dur ? Math.sin(Math.PI * d / dur) : 0; };
+// 每句歌词开头镜头「呼吸」一次：sin² 形状，起止速度都是 0
+const breath = (lines, t, dur = .9) => { const j = lineIdx(lines, t); if (j < 0) return 0; const d = t - lines[j].t; return d < dur ? Math.sin(Math.PI * d / dur) ** 2 : 0; };
 const keyPulse = (lines, t, re, dur = 1.6) => { let v = 0; for (const l of lines) if (re.test(l.text) && t >= l.t && t < l.t + dur) v = Math.max(v, 1 - (t - l.t) / dur); return v; };
+const lerpAng = (a, b, k) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return a + d * k; };
+// 跟拍：取角色前后 ±w 秒位置的加权平均 —— 镜头不随每一步、每一跳颠簸
+function follow(fn, t, w = 1) {
+  const acc = V(0, 0, 0); let ws = 0;
+  for (let i = -4; i <= 4; i++) { const k = 1 - Math.abs(i) / 5; acc.addScaledVector(fn(t + i * w / 4), k); ws += k; }
+  return acc.multiplyScalar(1 / ws);
+}
+const headingOf = (fn, t, dt, fallback) => { const a = fn(t - dt), b = fn(t + dt), dx = b.x - a.x, dz = b.z - a.z; return dx * dx + dz * dz > 1e-6 ? Math.atan2(dx, dz) : fallback; };
+
+// ---------- 各段角色的运动（都是时间的纯函数：摆位与跟拍共用，拖动进度条也不会错位） ----------
+function introYou(t) {
+  const s = TL.by.intro, yd = Math.max(0, t - (s.start + .72 * (s.end - s.start)));
+  return { yd, pos: A.youPath.at(yd).pos };
+}
+function v1Cell(d) { return clamp(Math.floor((A.idaPath.at(d).i - 2) / 2), 0, 39); }
+function v1State(t) {
+  const sec = TL.by.v1, dur = sec.end - sec.start;
+  const walkStart = sec.start + .4, arrive = sec.start + dur * .84;
+  const speed = A.idaPath.len / Math.max(4, arrive - walkStart);
+  const d = clamp((t - walkStart) * speed, 0, A.idaPath.len);
+  let pos = A.idaPath.at(d).pos, op = 1, walk = d > 0 && d < A.idaPath.len ? d / STEP : null;
+  if (t > arrive) {
+    pos = pos.lerp(A.doorPos, smooth(arrive + .5, arrive + 2.0, t));
+    walk = t < arrive + 2 ? (t - arrive) * 3.2 : null;
+    op = 1 - smooth(arrive + 1.5, arrive + 2.4, t);
+  }
+  return { pos, d, op, walk, walkStart, arrive, speed };
+}
+const LOOP = { c1: { speed: 1.25, stop: false }, c2: { speed: 1.55, stop: true } };
+function loopD(key, t) {
+  const s = TL.by[key], dur = s.end - s.start, x = t - s.start, { speed, stop } = LOOP[key];
+  if (!stop) return x * speed;
+  const ts = dur * .86;
+  if (x < ts) return x * speed;
+  const k = clamp((x - ts) / (dur * .1));
+  return ts * speed + speed * dur * .1 * (k - k * k / 2);
+}
+// 回廊的「展开」坐标：每绕一圈沿视线方向平移 (2,2,2)。等距视角下它和原位置重合，
+// 所以绕圈时朝向与跟拍都是连续的，不会在首尾接缝处跳一下
+const loopMod = d => ((d % B.L) + B.L) % B.L;
+function loopPosU(d) { const lap = Math.floor(d / B.L); return B.path.at(d - lap * B.L).pos.add(V(2, 2, 2).multiplyScalar(lap)); }
+const loopYaw = d => { const a = loopPosU(d - .25), b = loopPosU(d + .25); return Math.atan2(b.x - a.x, b.z - a.z); };
+function v2State(t) {
+  const sec = TL.by.v2, dur = sec.end - sec.start, lines = sec.lines.slice(0, D.n);
+  const rise = k => k === 0 ? -1e9 : (lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.1 + .55 * k / D.n));
+  const HOP = 1.0, HOP_DUR = .6;   // 石柱升起 1 秒后起跳，跳 0.6 秒
+  let at = 0;
+  for (let k = 1; k <= D.n; k++) if (t >= rise(k) + HOP + HOP_DUR) at = k;
+  const top = k => V(k * 1.6, .55, -k * 1.6);
+  let pos = top(at), walk = null;
+  const hopT = rise(at + 1) + HOP;
+  if (at < D.n && t > hopT) {
+    const k = clamp((t - hopT) / HOP_DUR); pos = top(at).lerp(top(at + 1), ease.inOut(k)); pos.y += Math.sin(Math.PI * k) * .7;
+    walk = k * 4;
+  }
+  return { pos, walk, rise };
+}
+function c3State(t) {
+  const sec = TL.by.c3, dur = sec.end - sec.start, lines = sec.lines.slice(0, E.n), last = sec.end - 4.3;
+  const rise = k => k === 0 ? -1e9 : Math.min(lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.06 + .62 * k / E.n), last - (E.n - k) * .35);
+  const CLIMB = 1.1, CLIMB_DUR = .55;   // 台阶升起 1.1 秒后迈上去，用时 0.55 秒
+  let at = 0;
+  for (let k = 1; k <= E.n; k++) if (t >= rise(k) + CLIMB + CLIMB_DUR) at = k;
+  const rel = (lines.find(l => /自由|飞/.test(l.text)) || {}).t;
+  const release = Math.min(rel ?? sec.start + dur * .6, sec.end - 3);
+  const summitT = Math.min(Math.max(rise(E.n) + 2.2, release + 1.6), sec.end - 2.4);
+  const sp = E.summit.clone().add(V(0, 0, .45));
+  let pos = E.pos[at].clone(), walk = null;
+  const climbT = rise(at + 1) + CLIMB;
+  if (at < E.n && t > climbT) { const k = clamp((t - climbT) / CLIMB_DUR); pos.lerp(E.pos[at + 1], ease.inOut(k)); walk = k * 2.5; }
+  const onTop = at === E.n && t > summitT;
+  if (onTop) {
+    const k = clamp((t - summitT) / 1.6), p2 = new Path([E.pos[E.n], sp]);
+    pos = p2.at(p2.len * ease.inOut(k)).pos; walk = k < 1 ? k * p2.len / STEP : null;
+  }
+  return { pos, walk, at, rise, release, summitT, onTop, sp };
+}
 
 const ACT = {
   intro(c) {
-    const { u, t, sec } = c; A.g.visible = true; driftClouds(A.clouds, t);
+    const { u, t } = c; A.g.visible = true; driftClouds(A.clouds, t);
     pose(ida, A.start, Math.PI / 4);
-    const leaveT = sec.start + .72 * c.dur;
-    const yd = Math.max(0, t - leaveT) * 1.0;
-    const yp = A.youPath.at(yd);
-    pose(you, yp.pos, yd > 0 ? yp.yaw : Math.PI / 4, { walk: yd > 0 ? yd / STEP : null });
+    const y = introYou(t);
+    pose(you, y.pos, lerpAng(Math.PI / 4, A.youPath.dirAt(y.yd), smooth(0, .4, y.yd)), { walk: y.yd > 0 ? y.yd / STEP : null });
     const cam = kf(u, [
       [0, { tx: .5, ty: 19, tz: .5, size: 6.5, az: 38, el: ISO_EL }],
       [.36, { tx: .5, ty: 18.5, tz: .5, size: 6.2, az: 45, el: ISO_EL }],
@@ -673,65 +763,60 @@ const ACT = {
     return { cam: { ...cam, roll: 0 }, pal: PAL.dawn };
   },
   v1(c) {
-    const { t, sec, dur } = c; A.g.visible = true; driftClouds(A.clouds, t);
-    const walkStart = sec.start + .4, arrive = sec.start + dur * .84;
-    const speed = A.idaPath.len / Math.max(4, arrive - walkStart);
-    const d = clamp((t - walkStart) * speed, 0, A.idaPath.len);
-    const p = A.idaPath.at(d);
-    let pos = p.pos, yaw = p.yaw, walk = d > 0 && d < A.idaPath.len ? d / STEP : null, op = 1;
-    const doorK = smooth(arrive + .3, arrive + 2.2, t);
-    if (t > arrive) {
-      yaw = Math.PI;
-      pos = pos.clone().lerp(A.doorPos, smooth(arrive + .5, arrive + 2.0, t));
-      walk = t < arrive + 2 ? (t - arrive) * 3.2 : null;
-      op = 1 - smooth(arrive + 1.5, arrive + 2.4, t);
-    }
-    pose(ida, pos, yaw, { walk, opacity: op });
-    A.glow.uniforms.opacity.value = doorK * .85;
+    const { t, u, sec } = c; A.g.visible = true; driftClouds(A.clouds, t);
+    const st = v1State(t), { d, walkStart, arrive, speed } = st;
+    let yaw = lerpAng(Math.PI / 4, A.idaPath.dirAt(d), smooth(0, .4, d));
+    if (t > arrive) yaw = lerpAng(A.idaPath.dirAt(A.idaPath.len), Math.PI, smooth(arrive, arrive + .5, t));
+    pose(ida, st.pos, yaw, { walk: st.walk, opacity: st.op });
+    A.glow.uniforms.opacity.value = smooth(arrive + .3, arrive + 2.2, t) * .85;
     // 「你」先走一步，然后消失在塔后
-    const intro = TL.by.intro, yd = t - (intro.start + .72 * (intro.end - intro.start));
-    const yp = A.youPath.at(yd);
-    pose(you, yp.pos, yp.yaw, { walk: yd / STEP, opacity: 1 - smooth(sec.start + 2, sec.start + 5, t) });
+    const y = introYou(t);
+    pose(you, y.pos, A.youPath.dirAt(y.yd), { walk: y.yd / STEP, opacity: 1 - smooth(sec.start + 2, sec.start + 5, t) });
     // 每句一个脚印光点 + 幽灵回声
-    const pathCell = dist => { const st = A.idaPath.at(dist); return clamp(Math.floor((st.i - 2) / 2), 0, 39); };
     A.feet.forEach(f => f.material.uniforms.opacity.value = 0);
     let gl = null;
     for (const l of sec.lines) {
       if (l.t > t) break;
-      const k = pathCell(clamp((l.t - walkStart) * speed, 0, A.idaPath.len));
-      const age = t - l.t;
-      A.feet[k].material.uniforms.opacity.value = Math.max(A.feet[k].material.uniforms.opacity.value, .4 + .6 * Math.exp(-age * .9));
+      const k = v1Cell(clamp((l.t - walkStart) * speed, 0, A.idaPath.len));
+      const m = A.feet[k].material.uniforms.opacity;
+      m.value = Math.max(m.value, .4 + .6 * Math.exp(-(t - l.t) * .9));
       gl = { l, k };
     }
     if (gl && gl.l.li % 2 === 1) {
-      const age = t - gl.l.t, k = Math.min(gl.k + 4, 39), [x, y, z] = A.cells[k];
+      const age = t - gl.l.t, k = Math.min(gl.k + 4, 39), [x, y0, z] = A.cells[k];
       const nxt = A.cells[Math.max(k - 1, 0)];
-      pose(ghost, V(x, y, z), Math.atan2(nxt[0] - x, nxt[2] - z), { opacity: .5 * bell(age, 0, 3) });
+      pose(ghost, V(x, y0, z), Math.atan2(nxt[0] - x, nxt[2] - z), { opacity: .5 * bell(age, 0, 3) });
     }
-    // 机位：随她绕塔环绕
-    const raw = Math.atan2(pos.x, pos.z) * 180 / Math.PI;
-    const expected = 121 - 18 * pathCell(d);
+    // 机位：随她绕塔环绕（跟的是平滑后的位置，绕塔速度均匀）
+    const sp = follow(tt => v1State(tt).pos, t, 1.2);
+    const raw = Math.atan2(sp.x, sp.z) * 180 / Math.PI, expected = 121 - 18 * v1Cell(d);
     const ang = raw + 360 * Math.round((expected - raw) / 360);
-    const onStairs = smooth(2.5, 5, d);
-    const tgt = V(pos.x * .5, pos.y + .7, pos.z * .5);
-    const az = lerp(45, ang + 14, onStairs);
-    const base = kf(c.u, [[0, { size: 3.0 }], [.12, { size: 4.6 }], [.3, { size: 3.4 }], [.6, { size: 2.9 }], [.84, { size: 2.6 }], [1, { size: 1.9 }]]);
-    const near = smooth(.84, 1, c.u);
-    const target = tgt.lerp(V(A.doorPos.x, A.doorPos.y + .6, A.doorPos.z), near);
-    return { cam: camOf(target, { az: lerp(az, 20, near), el: lerp(ISO_EL, 24, onStairs), size: base.size * (1 - .035 * breath(sec.lines, t)) }), pal: PAL.dawn };
+    const onStairs = smooth(1.5, 8, d), near = smooth(.82, 1, u);
+    const az0 = lerp(45, ang + 14, onStairs);
+    const az = lerp(az0, 20 + 360 * Math.round((az0 - 20) / 360), near);
+    const base = kf(u, [[0, { size: 3.0 }], [.12, { size: 4.6 }], [.3, { size: 3.4 }], [.6, { size: 2.9 }], [.84, { size: 2.6 }], [1, { size: 1.9 }]]);
+    const target = V(sp.x * .5, sp.y + .7, sp.z * .5).lerp(V(A.doorPos.x, A.doorPos.y + .6, A.doorPos.z), near);
+    return { cam: camOf(target, { az, el: lerp(ISO_EL, 24, onStairs), size: base.size * (1 - .035 * breath(sec.lines, t)) }), pal: PAL.dawn };
   },
-  c1(c) { return loopAct(c, { speed: 1.25, roll: 4, pal: PAL.loop, sky: PAL.loop.sky }); },
-  c2(c) { return loopAct(c, { speed: 1.55, roll: 6, pal: PAL.loop, sky: PAL.dusk.sky, text: PAL.dusk.text, stop: true }); },
+  c1(c) { return loopAct(c, 'c1', { roll: 4, pal: PAL.loop, sky: PAL.loop.sky }); },
+  c2(c) { return loopAct(c, 'c2', { roll: 6, pal: PAL.loop, sky: PAL.dusk.sky, text: PAL.dusk.text }); },
   inter1(c) {
-    const { u, t, sec, dur } = c; C.g.visible = true;
+    const { u, t, dur } = c; C.g.visible = true;
     const rot = ease.inOutBack(smooth(.22, .56, u)) * Math.PI / 2;
     C.bridge.rotation.y = rot; C.wheel.rotation.y = rot * 4;
+    const standYaw = Math.atan2(-.4, .6);
     let pos, yaw, walk = null, op = 1;
-    if (u < .2) { const d = C.inPath.len * ease.inOut(u / .2); const p = C.inPath.at(d); pos = p.pos; yaw = p.yaw; walk = u < .2 ? d / STEP : null; }
-    else if (u < .58) { pos = C.inPath.at(C.inPath.len).pos; yaw = Math.atan2(-.4, .6) + Math.sin(rot * 4) * .15; }
-    else {
-      const k = clamp((u - .58) / .28), d = C.outPath.len * ease.inOut(k), p = C.outPath.at(d);
-      pos = p.pos; yaw = k >= 1 ? Math.PI : p.yaw; walk = k < 1 ? d / STEP : null;
+    if (u < .2) {
+      const d = C.inPath.len * ease.inOut(u / .2);
+      pos = C.inPath.at(d).pos; yaw = C.inPath.dirAt(d); walk = d / STEP;
+    } else if (u < .58) {
+      const k = smooth(.2, .26, u);
+      pos = C.inPath.at(C.inPath.len).pos; yaw = lerpAng(C.inPath.dirAt(C.inPath.len), standYaw, k) + Math.sin(rot * 4) * .15 * k;
+    } else {
+      const k = clamp((u - .58) / .28), d = C.outPath.len * ease.inOut(k);
+      pos = C.outPath.at(d).pos; walk = k < 1 ? d / STEP : null;
+      yaw = lerpAng(standYaw, C.outPath.dirAt(d), smooth(.58, .63, u));
+      if (k >= 1) yaw = lerpAng(C.outPath.dirAt(C.outPath.len), Math.PI, smooth(.86, .89, u));
       if (u > .88) { pos = pos.clone().add(V(0, 0, -.25 * smooth(.88, .95, u))); op = 1 - smooth(.9, .97, u); walk = u < .95 ? (u - .88) * dur * 3 : null; }
     }
     pose(ida, pos, yaw, { walk, opacity: op });
@@ -747,25 +832,15 @@ const ACT = {
     return { cam: { ...cam, el: ISO_EL, roll: 0 }, pal: PAL.court };
   },
   v2(c) {
-    const { u, t, sec, dur } = c; D.g.visible = true;
-    const lines = sec.lines.slice(0, D.n);
-    const rise = k => k === 0 ? -1e9 : (lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.1 + .55 * k / D.n));
-    let at = 0;
+    const { u, t, sec } = c; D.g.visible = true;
+    const st = v2State(t);
     for (let k = 0; k <= D.n; k++) {
-      const rt = rise(k), kk = smooth(rt, rt + .9, t);
-      D.pillars[k].position.y = k === 0 ? 0 : lerp(-4.8, 0, ease.outBack(clamp((t - rt) / .9)) * (t > rt ? 1 : 0));
-      D.rm[k].uniforms.opacity.value = k ? .7 * (1 - smooth(rt, rt + 2.6, t)) * (t > rt ? 1 : 0) : 0;
+      const rt = st.rise(k);
+      D.pillars[k].position.y = k === 0 ? 0 : (t > rt ? lerp(-4.8, 0, ease.outBack(clamp((t - rt) / .9))) : -4.8);
+      D.rm[k].uniforms.opacity.value = k && t > rt ? .7 * (1 - smooth(rt, rt + 2.6, t)) : 0;
       D.ripples[k].scale.setScalar(.6 + 2.6 * smooth(rt, rt + 2.6, t));
-      if (t >= rt + 1.0 && kk >= 1) at = k;
     }
-    const top = k => V(k * 1.6, .55, -k * 1.6);
-    let pos = top(at), walk = null;
-    const hopT = rise(at + 1) + 1.0;
-    if (at < D.n && t > hopT) {
-      const k = clamp((t - hopT) / .6); pos = top(at).lerp(top(at + 1), ease.inOut(k)); pos.y += Math.sin(Math.PI * k) * .7;
-      walk = k < 1 ? k * 4 : null;
-    }
-    pose(ida, pos, Math.atan2(1, -1), { walk });
+    pose(ida, st.pos, Math.atan2(1, -1), { walk: st.walk });
     // 远方的「你」与灯
     const sink = smooth(.86, .98, u);
     D.farG.position.y = -6.5 * ease.inOut(sink);
@@ -775,30 +850,29 @@ const ACT = {
     D.lantern.position.copy(lantern); D.halo.position.copy(lantern);
     D.halo.scale.setScalar(.32 + .05 * Math.sin(t * 3));
     D.fr.uniforms.opacity.value = .7 * bell(u, .86, 1); D.farRipple.scale.setScalar(1 + 3 * smooth(.86, 1, u));
-    const follow = pos.clone().add(V(.9, .4, -.9));
+    const fol = follow(tt => v2State(tt).pos, t, 1.2).add(V(.9, .4, -.9));
     const look = V(D.far, 1.6, -D.far);
     const k2 = smooth(.66, .8, u), k3 = smooth(.82, .9, u);
-    const tgt = follow.clone().lerp(follow.clone().lerp(look, .55), k2).lerp(look, k3);
-    const size = lerp(lerp(lerp(4.6, 3.4, smooth(0, .12, u)), 5.2, k2), 3.6, k3) * (1 - .03 * breath(lines, t));
+    const tgt = fol.clone().lerp(fol.clone().lerp(look, .55), k2).lerp(look, k3);
+    const size = lerp(lerp(lerp(4.6, 3.4, smooth(0, .12, u)), 5.2, k2), 3.6, k3) * (1 - .03 * breath(sec.lines, t));
     return { cam: camOf(tgt, { el: 26, size }), pal: PAL.night, night: true };
   },
   bridge(c) {
-    const { u, t, sec, dur } = c; B.g.visible = true;
-    // 她从副歌二停下的位置继续走到断口
-    const sEnd = loopEnd(), target = B.L - .55;
-    let dist = (target - (sEnd % B.L) + B.L) % B.L; if (dist < 3) dist += B.L;
-    const k = smooth(0, .42, u), d = (sEnd + dist * k) % B.L;
-    const p = B.path.at(d);
+    const { u, t } = c; B.g.visible = true;
+    // 她从副歌二停下的位置继续走到断口（起步速度为 0，与上一段无缝）
+    const sEnd = loopD('c2', TL.by.c2.end);
+    let dist = (B.L - .55 - loopMod(sEnd) + B.L) % B.L; if (dist < 3) dist += B.L;
+    const k = smooth(0, .42, u), dU = sEnd + dist * k, dm = loopMod(dU);
     const drift = smooth(.28, .8, u);
     B.halfB.position.set(.3 * drift, .8 * drift + Math.sin(t * .8) * .06 * drift, 1.5 * drift);
     B.halfA.position.set(-.1 * drift, -.3 * drift, -.4 * drift);
     const sit = smooth(.55, .66, u);
-    const pos = p.pos.clone().add(d > B.L * .5 ? B.halfB.position : B.halfA.position);
-    pose(ida, pos, k < 1 ? p.yaw : p.yaw, { walk: k > 0 && k < 1 ? (sEnd + dist * k) / STEP : null, sit, dip: sit });
+    const pos = B.path.at(dm).pos.add(dm > B.L * .5 ? B.halfB.position : B.halfA.position);
+    pose(ida, pos, loopYaw(dU), { walk: k > 0 && k < 1 ? dU / STEP : null, sit, dip: sit });
     U.desat.value = smooth(.2, .6, u) * .72;
     const cam = kf(u, [
-      [0, { tx: B.center.x, ty: B.center.y, tz: B.center.z, size: 5.2, az: 45, el: ISO_EL, roll: 0 }],
-      [.15, { tx: B.center.x, ty: B.center.y, tz: B.center.z, size: 5.4, az: 45, el: ISO_EL, roll: 0 }],
+      [0, { tx: B.center.x, ty: B.center.y, tz: B.center.z, size: 6.0, az: 45, el: ISO_EL, roll: 0 }],
+      [.15, { tx: B.center.x, ty: B.center.y, tz: B.center.z, size: 5.6, az: 45, el: ISO_EL, roll: 0 }],
       [.5, { tx: B.center.x, ty: B.center.y + .6, tz: B.center.z + .5, size: 6.2, az: 100, el: 16, roll: 0 }],
       [.85, { tx: pos.x, ty: pos.y + .4, tz: pos.z - .6, size: 2.5, az: 78, el: 16, roll: -4 }],
       [1, { tx: pos.x, ty: pos.y + .45, tz: pos.z - .6, size: 2.3, az: 74, el: 16, roll: -4 }]]);
@@ -806,36 +880,28 @@ const ACT = {
     return { cam, pal: PAL.loop, sky, text: PAL.grey.text, rain: smooth(.45, .6, u) * (1 - smooth(.92, 1, u)) };
   },
   c3(c) {
-    const { u, t, sec, dur } = c; E.g.visible = true; driftClouds(E.clouds, t);
-    const lines = sec.lines.slice(0, E.n);
-    const rise = k => k === 0 ? -1e9 : (lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.06 + .62 * k / E.n));
-    let at = 0;
+    const { u, t, sec } = c; E.g.visible = true; driftClouds(E.clouds, t);
+    const st = c3State(t);
     for (let k = 0; k <= E.n; k++) {
-      const rt = rise(k);
+      const rt = st.rise(k);
       E.steps[k].position.y = k === 0 ? 0 : (t < rt ? -18 : lerp(-18, 0, ease.outBack(clamp((t - rt) / 1.1))));
-      if (t >= rt + 1.1) at = k;
     }
-    const release = (lines.find(l => /自由|飞/.test(l.text)) || {}).t ?? sec.start + dur * .6;
-    const summitT = Math.max(rise(E.n) + 2.2, release + 1.6);
-    let pos = E.pos[at].clone(), walk = null, yaw = Math.atan2(1, -1);
-    const climbT = rise(at + 1) + 1.1;
-    if (at < E.n && t > climbT) { const k = clamp((t - climbT) / .55); pos.lerp(E.pos[at + 1], ease.inOut(k)); walk = k * 2.5; yaw = Math.atan2(E.pos[at + 1].x - E.pos[at].x, E.pos[at + 1].z - E.pos[at].z); }
-    const sp = E.summit.clone().add(V(0, 0, .45));
-    if (at === E.n && t > summitT) {
-      const k = clamp((t - summitT) / 1.6);
-      const p2 = new Path([E.pos[E.n], sp]); const q = p2.at(p2.len * ease.inOut(k));
-      pos = q.pos; walk = k < 1 ? k * p2.len / STEP : null; yaw = k < 1 ? q.yaw : Math.PI;
-    }
-    pose(ida, pos, yaw, { walk });
+    // 朝向：走动时看前方；停下时保持上一步的方向；登顶后转身面向拱门
+    const P0 = E.pos[Math.max(st.at - 1, 0)], P1 = E.pos[st.at];
+    let fb = st.at > 0 ? Math.atan2(P1.x - P0.x, P1.z - P0.z) : Math.atan2(1, -1);
+    if (st.onTop) fb = Math.atan2(st.sp.x - E.pos[E.n].x, st.sp.z - E.pos[E.n].z);
+    let yaw = headingOf(tt => c3State(tt).pos, t, .12, fb);
+    yaw = lerpAng(yaw, Math.PI, smooth(st.summitT + 1.6, st.summitT + 2.3, t));
+    pose(ida, st.pos, yaw, { walk: st.walk });
     const youPos = E.summit.clone().add(V(.15, 0, -.25)), pn = E.pos[E.n];
-    pose(you, youPos, Math.atan2(pn.x - youPos.x, pn.z - youPos.z), { opacity: 1 - smooth(release, release + 1.2, t), dip: bell(t, release - 2, release) * .4 });
+    pose(you, youPos, Math.atan2(pn.x - youPos.x, pn.z - youPos.z), { opacity: 1 - smooth(st.release, st.release + 1.2, t), dip: bell(t, st.release - 2, st.release) * .4 });
     E.debris.forEach(o => { o.dg.position.y = o.y0 + Math.sin(t * .4 + o.ph) * .25; });
-    const follow = pos.clone().add(V(.6, .6, -.6));
+    const fol = follow(tt => c3State(tt).pos, t, 1.0).add(V(.6, .6, -.6));
     const look = youPos.clone().add(V(0, .9, 0));
-    const kL = bell(t, release - 3, release + 3.5);
-    const tgt = follow.clone().lerp(look, kL);
-    const size = lerp(lerp(5.2, 4.0, smooth(0, .1, u)), 3.2, kL) * (1 - .03 * breath(lines, t));
-    return { cam: camOf(tgt, { size, el: lerp(ISO_EL, 26, kL) }), pal: PAL.gold, sun: lerp(.6, .3, u), birds: { at: release, from: youPos } };
+    const kL = bell(t, st.release - 3, st.release + 3.5);
+    const tgt = fol.clone().lerp(look, kL);
+    const size = lerp(lerp(5.2, 4.0, smooth(0, .1, u)), 3.2, kL) * (1 - .03 * breath(sec.lines, t));
+    return { cam: camOf(tgt, { size, el: lerp(ISO_EL, 26, kL) }), pal: PAL.gold, sun: lerp(.6, .3, u), birds: { at: st.release, from: youPos } };
   },
   outro(c) {
     const { u, t } = c; E.g.visible = true; driftClouds(E.clouds, t);
@@ -848,39 +914,29 @@ const ACT = {
       [0, { tx: s.x, ty: s.y + 1, tz: s.z, size: 3.0, az: 45, el: ISO_EL }],
       [.7, { tx: s.x - E.n * .2, ty: s.y + 3.5, tz: s.z + E.n * .2, size: 9.5, az: 38, el: 30 }],
       [1, { tx: s.x - E.n * .2, ty: s.y + 4, tz: s.z + E.n * .2, size: 10.5, az: 36, el: 30 }]]);
-    const c3 = TL.by.c3, release = (c3.lines.find(l => /自由|飞/.test(l.text)) || {}).t ?? c3.start + (c3.end - c3.start) * .6;
+    const release = c3State(TL.by.c3.end).release;
     return { cam: { ...cam, roll: 0 }, pal: PAL.gold, sun: .28, birds: { at: release, from: E.summit.clone().add(V(.15, 0, -.25)), orbit: true }, end: smooth(.35, .5, u) };
   },
 };
 // 回廊段：c1 / c2 共用
-function loopS(c, speed, stop) {
-  const t = c.t - c.sec.start;
-  if (!stop) return t * speed;
-  const ts = c.dur * .86;
-  if (t < ts) return t * speed;
-  const k = clamp((t - ts) / (c.dur * .1));
-  return ts * speed + speed * c.dur * .1 * (k - k * k / 2);
-}
-function loopEnd() { const s = TL.by.c2; return loopS({ t: s.end, sec: s, dur: s.end - s.start }, 1.55, true); }
-function loopAct(c, o) {
+function loopAct(c, key, o) {
   const { u, t, sec } = c; B.g.visible = true;
   B.halfA.position.set(0, 0, 0); B.halfB.position.set(0, 0, 0);
-  const d = loopS(c, o.speed, o.stop), p = B.path.at(d % B.L);
-  const moving = !o.stop || u < .95;
-  pose(ida, p.pos, p.yaw, { walk: moving ? d / STEP : null, dip: o.stop ? -smooth(.92, 1, u) * .2 : 0 });
+  const d = loopD(key, t), fn = tt => loopPosU(loopD(key, tt));
+  const moving = !LOOP[key].stop || u < .95;
+  pose(ida, B.path.at(loopMod(d)).pos, loopYaw(d), { walk: moving ? d / STEP : null, dip: LOOP[key].stop ? -smooth(.92, 1, u) * .2 : 0 });
   // 幽灵：每三句出现一次，在她前方的高处
   const j = lineIdx(sec.lines, t);
   if (j >= 0 && j % 3 === 1) {
-    const age = t - sec.lines[j].t, gd = (d + B.L * .42) % B.L, gp = B.path.at(gd);
-    pose(ghost, gp.pos, gp.yaw + Math.PI, { opacity: .5 * bell(age, 0, 3.2) });
+    const age = t - sec.lines[j].t, gd = loopMod(d + B.L * .42);
+    pose(ghost, B.path.at(gd).pos, loopYaw(gd) + Math.PI, { opacity: .5 * bell(age, 0, 3.2) });
   }
   B.mats[0].uniforms.tintK.value = .22 * keyPulse(sec.lines, t, /难过/, 1.4);
-  const b = breath(sec.lines, t);
-  const follow = p.pos.clone().add(V(0, .5, 0));
+  const sp = follow(fn, t, .8).add(V(0, .5, 0));
   const k = kf(u, [[0, { f: 0, size: 6.0, roll: 0 }], [.2, { f: .8, size: 3.0, roll: 0 }],
     [.5, { f: .8, size: 2.7, roll: o.roll }], [.72, { f: .6, size: 3.3, roll: -o.roll * .7 }], [.86, { f: 0, size: 6.4, roll: 0 }], [1, { f: 0, size: 6.0, roll: 0 }]]);
-  const tgt = B.center.clone().lerp(follow, k.f);
-  return { cam: camOf(tgt, { size: k.size * (1 - .055 * b), roll: k.roll }), pal: o.pal, sky: o.sky, text: o.text };
+  const tgt = B.center.clone().lerp(sp, k.f);
+  return { cam: camOf(tgt, { size: k.size * (1 - .055 * breath(sec.lines, t)), roll: k.roll }), pal: o.pal, sky: o.sky, text: o.text };
 }
 function mixHex(a, b, k) { return '#' + new THREE.Color(a).lerp(new THREE.Color(b), k).getHexString(); }
 
@@ -917,18 +973,42 @@ function sectionAt(t) {
 }
 function shotAt(sec, u) { const sh = STORY[sec.key].shots; let r = sh[0]; for (const x of sh) if (u >= x[0]) r = x; return r; }
 
-function renderFrame(t) {
-  t = clamp(t, 0, TL.duration - 1e-3);
-  const sec = sectionAt(t), dur = sec.end - sec.start, u = clamp((t - sec.start) / dur);
+// ---------- 段落衔接 ----------
+//  · 同一场景的相邻段落（前奏→主歌一、副歌二→桥段、终副歌→尾奏）：镜头在 3 秒内从上一段的运镜平滑接力过来
+//  · 换场景的段落：两个画面交叉溶解，溶解期间镜头一直向前推进（推进穿越），运动不中断
+function runAct(sec, t) {
   for (const o of [A.g, B.g, C.g, D.g, E.g]) o.visible = false;
-  you.visible = ghost.visible = false; ghost.userData.mats.forEach(m => m.uniforms.opacity.value = 0);
+  you.visible = false; pose(ghost, V(0, -99, 0), 0, { opacity: 0, visible: false });
   U.desat.value = 0; B.mats[0].uniforms.tintK.value = 0;
-  pose(ghost, V(0, -99, 0), 0, { opacity: 0, visible: false });
+  const dur = sec.end - sec.start, u = clamp((t - sec.start) / dur);
   const r = ACT[sec.key]({ t, u, sec, dur });
-  const pal = r.pal, sky = r.sky || pal.sky;
+  r.sec = sec; r.u = u; r.textC = r.text || r.pal.text; r.sky = r.sky || r.pal.sky;
+  return r;
+}
+function mixCam(a, b, k) {
+  const o = { ...b };
+  for (const f in b) {
+    if (f === 'az') { let d = (b.az - a.az) % 360; if (d > 180) d -= 360; if (d < -180) d += 360; o.az = a.az + d * k; }
+    else o[f] = lerp(a[f] ?? b[f], b[f], k);
+  }
+  return o;
+}
+const transHalf = (a, b) => Math.min(.9, .3 * (a.end - a.start), .3 * (b.end - b.start));
+const handoff = sec => Math.min(3, .4 * (sec.end - sec.start));
+const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
+const gb = buf.getContext('2d');
+let DRY = null;   // 镜头分析模式：只记录机位，不绘制
+
+function drawScene(r, t) {
+  if (DRY) {
+    setCam(r.cam);
+    const p = ida.visible ? project(ida.position.clone().add(V(0, .3, 0))) : null;
+    DRY.push({ key: r.sec.key, cam: { ...r.cam }, ida: p && [p[0] / H, p[1] / H] });
+    return;
+  }
+  const { sec, u, sky, pal } = r;
   U.fogC.value.set(sky[1]); U.fogLo.value = pal.fogLo; U.fogHi.value = pal.fogHi;
   setCam(r.cam);
-
   // 天空
   const grd = g2.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, sky[0]); grd.addColorStop(1, sky[1]);
   g2.globalAlpha = 1; g2.fillStyle = grd; g2.fillRect(0, 0, W, H);
@@ -960,7 +1040,6 @@ function renderFrame(t) {
     for (const [x, y, w, ph] of SPARK) { g2.globalAlpha = .18 * Math.max(0, Math.sin(t * 1.7 + ph)); g2.fillRect(x * W, y * H, w * W / 1920, 2); }
     g2.globalAlpha = 1;
   }
-
   // 鸟群：「你」化作白鸟
   if (r.birds && t > r.birds.at) {
     const [bx, by] = project(r.birds.from.clone().add(V(0, .5, 0)));
@@ -968,8 +1047,7 @@ function renderFrame(t) {
     for (const b of BIRDS) {
       let x, y, a;
       if (r.birds.orbit) {
-        const cx = W * (PORTRAIT ? .62 : .7), cy = H * .28;
-        const ang = b.a + t * .25 * b.v;
+        const cx = W * (PORTRAIT ? .62 : .7), cy = H * .28, ang = b.a + t * .25 * b.v;
         x = cx + Math.cos(ang) * unit * (.16 + .08 * b.r); y = cy + Math.sin(ang) * unit * (.07 + .03 * b.r); a = .9;
       } else {
         const k = age * b.v;
@@ -1009,18 +1087,44 @@ function renderFrame(t) {
     const lg = g2.createRadialGradient(W * .7, H * .25, 0, W * .7, H * .25, W * .8); lg.addColorStop(0, `rgba(255,236,190,${a})`); lg.addColorStop(1, 'rgba(255,236,190,0)');
     g2.fillStyle = lg; g2.fillRect(0, 0, W, H);
   }
+}
+
+function renderFrame(t) {
+  t = clamp(t, 0, TL.duration - 1e-3);
+  const secs = TL.sections, sec = sectionAt(t), i = secs.indexOf(sec), prev = secs[i - 1], next = secs[i + 1];
+  const dur = sec.end - sec.start, u = clamp((t - sec.start) / dur);
+  const veil = (a, b) => a && b ? VEIL[`${a.key}>${b.key}`] : null;
+  let from = null, to = null, b0 = 0, h = 0;
+  if (veil(prev, sec) && t < sec.start + transHalf(prev, sec)) { from = prev; to = sec; b0 = sec.start; h = transHalf(prev, sec); }
+  else if (veil(sec, next) && t > next.start - transHalf(sec, next)) { from = sec; to = next; b0 = next.start; h = transHalf(sec, next); }
+  let main, mix = null;
+  if (from) {
+    // 推进穿越：旧画面加速推近并淡出，新画面从稍远处继续推近并淡入，两边的推进速度在中点相接
+    const p = clamp((t - (b0 - h)) / (2 * h)), k = ease.inOut(p);
+    const ra = runAct(from, t); ra.cam.size *= 1 - .2 * p * p; drawScene(ra, t);
+    if (!DRY) { gb.globalAlpha = 1; gb.drawImage(out, 0, 0); }
+    const rb = runAct(to, t); rb.cam.size *= 1 + .25 * (1 - p) * (1 - p); drawScene(rb, t);
+    if (!DRY) { g2.globalAlpha = 1 - k; g2.drawImage(buf, 0, 0); g2.globalAlpha = 1; }
+    main = k < .5 ? ra : rb;
+    mix = { a: ra, b: rb, k, color: veil(from, to), peak: 1 - smooth(0, h, Math.abs(t - b0)) };
+  } else {
+    const ho = prev && !veil(prev, sec) ? handoff(sec) : 0;
+    const pr = ho && t < sec.start + ho ? runAct(prev, t) : null;
+    main = runAct(sec, t);
+    if (pr) main.cam = mixCam(pr.cam, main.cam, ease.inOut((t - sec.start) / ho));
+    drawScene(main, t);
+  }
+  const info = { sec, u, shot: shotAt(sec, u) };
+  if (DRY) return info;
+
   // 暗角
   const vg = g2.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .45, W / 2, H / 2, Math.max(W, H) * .78);
   vg.addColorStop(0, 'rgba(30,20,40,0)'); vg.addColorStop(1, 'rgba(30,20,40,.16)'); g2.fillStyle = vg; g2.fillRect(0, 0, W, H);
-  // 转场幕
-  const idx = TL.sections.indexOf(sec);
-  for (const j of [idx, idx + 1]) {
-    const s = TL.sections[j], p = TL.sections[j - 1]; if (!s || !p) continue;
-    const col = VEIL[`${p.key}>${s.key}`]; if (!col) continue;
-    const a = 1 - smooth(0, .65, Math.abs(t - s.start));
-    if (a > 0) { g2.globalAlpha = a; g2.fillStyle = col; g2.fillRect(0, 0, W, H); g2.globalAlpha = 1; }
-  }
-  const textC = r.text || pal.text, shadowC = r.night ? 'rgba(0,0,0,.45)' : 'rgba(255,250,244,.75)';
+  // 转场时一层淡淡的光（进门的白光 / 入夜的深蓝）
+  if (mix && mix.color) { g2.globalAlpha = .32 * mix.peak; g2.fillStyle = mix.color; g2.fillRect(0, 0, W, H); g2.globalAlpha = 1; }
+  const night = mix ? (mix.k < .5 ? mix.a : mix.b).night : main.night;
+  const textC = mix ? mixHex(mix.a.textC, mix.b.textC, mix.k) : main.textC;
+  const shadowC = night ? 'rgba(0,0,0,.45)' : 'rgba(255,250,244,.75)';
   const unit = PORTRAIT ? W : H;
   // 片名
   if (sec.key === 'intro') {
@@ -1044,26 +1148,34 @@ function renderFrame(t) {
     }
   }
   // 歌词
+  const cur = TL.lines[lineIdx(TL.lines, t)];
   if (cur && cur.text && t < cur.end + .4) {
     const age = t - cur.t, a = smooth(0, .35, age) * (1 - smooth(cur.end - .05, cur.end + .4, t));
     const sp = lerp(unit * .02, unit * .008, ease.out(clamp(age / .6)));
-    const ly = H * (PORTRAIT ? .8 : .86), bh = unit * .075, rgb = r.night ? '14,18,48' : '255,248,240';
+    const ly = H * (PORTRAIT ? .8 : .86), bh = unit * .075, rgb = night ? '14,18,48' : '255,248,240';
     const band = g2.createLinearGradient(0, ly - bh, 0, ly + bh);
     band.addColorStop(0, `rgba(${rgb},0)`); band.addColorStop(.5, `rgba(${rgb},${.5 * a})`); band.addColorStop(1, `rgba(${rgb},0)`);
     g2.fillStyle = band; g2.fillRect(0, ly - bh, W, bh * 2);
     spacedText(cur.text, W / 2, ly, unit * (PORTRAIT ? .05 : .042), 500, textC, sp, a, shadowC);
   }
   // 片尾
-  if (r.end) {
-    g2.globalAlpha = r.end * .35; g2.fillStyle = '#FFF6E8'; g2.fillRect(0, 0, W, H); g2.globalAlpha = 1;
+  if (main.end) {
+    g2.globalAlpha = main.end * .35; g2.fillStyle = '#FFF6E8'; g2.fillRect(0, 0, W, H); g2.globalAlpha = 1;
     const y0 = H * .36;
-    spacedText('有些路，', W / 2, y0, unit * .05, 300, PAL.gold.text, unit * .02, r.end, shadowC);
-    spacedText('只在某个角度才相连。', W / 2, y0 + unit * .085, unit * .05, 300, PAL.gold.text, unit * .02, r.end, shadowC);
-    const a2 = r.end * smooth(.55, .7, u);
+    spacedText('有些路，', W / 2, y0, unit * .05, 300, PAL.gold.text, unit * .02, main.end, shadowC);
+    spacedText('只在某个角度才相连。', W / 2, y0 + unit * .085, unit * .05, 300, PAL.gold.text, unit * .02, main.end, shadowC);
+    const a2 = main.end * smooth(.55, .7, u);
     const credits = ['《我不难过》　演唱：孙燕姿', ...TL.credits.slice(0, 3), '画风致敬《纪念碑谷》(ustwo games) · 同人作品，仅供学习交流'];
     credits.forEach((s, i) => spacedText(s, W / 2, y0 + unit * (.21 + i * .042), unit * .02, 300, PAL.gold.text, unit * .008, a2 * .85, shadowC));
   }
-  return { sec, u, shot: shotAt(sec, u) };
+  return info;
+}
+// 镜头轨迹（分析运镜是否连续用）：返回每一帧各画面层的机位
+function camTrace(t0, t1, fps = 30) {
+  const res = [];
+  for (let f = 0; t0 + f / fps < t1; f++) { DRY = []; renderFrame(t0 + f / fps); res.push({ t: t0 + f / fps, cams: DRY }); }
+  DRY = null;
+  return res;
 }
 
 // ============================================================
@@ -1169,6 +1281,7 @@ window.MV = {
   ready: loadFonts(BASE_TEXT),
   loadLRC, setDuration,
   renderFrame: t => { renderFrame(t); return true; },
+  camTrace,
   timeline: () => ({ duration: TL.duration, mode: TL.mode, sections: TL.sections.map(s => ({ key: s.key, start: s.start, end: s.end, lines: s.lines.length })) }),
 };
 if (CONFIG.renderMode) document.body.classList.add('render');
