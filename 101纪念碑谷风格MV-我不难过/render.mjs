@@ -51,10 +51,15 @@ if (three) {
 await page.goto(url);
 await page.waitForFunction(() => window.MV, null, { timeout: 60000 });
 await page.evaluate(() => window.MV.ready);
+if (audio) {
+  console.log('分析音乐节拍…');
+  const info = await page.evaluate(b64 => window.MV.loadAudio(b64), fs.readFileSync(audio).toString('base64'));
+  console.log(`节拍：${info.bpm.toFixed(1)} BPM，共 ${info.beats} 拍`);
+}
 if (lrc) await page.evaluate(t => window.MV.loadLRC(t), fs.readFileSync(lrc, 'utf8'));
 if (audioDur) await page.evaluate(d => window.MV.setDuration(d), audioDur);
 const tl = await page.evaluate(() => window.MV.timeline());
-console.log(`段落（${tl.mode}）：`);
+console.log(`段落（${tl.mode}${tl.bpm ? '，已对齐小节线' : ''}）：`);
 for (const s of tl.sections) console.log(`  ${s.key.padEnd(7)} ${s.start.toFixed(1).padStart(6)}s – ${s.end.toFixed(1).padStart(6)}s  歌词 ${s.lines} 行`);
 
 const from = Number(arg('from', 0)), to = Math.min(Number(arg('to', tl.duration)), tl.duration);

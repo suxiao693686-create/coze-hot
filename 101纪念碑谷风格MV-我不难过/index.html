@@ -61,6 +61,7 @@
   <button id="bBoard">分镜表</button>
   <input id="seek" type="range" min="0" max="250" step="0.01" value="0">
   <span id="time">0:00 / 4:10</span>
+  <span id="bpm" style="color:var(--muted);font-size:12px">♩ 未载入音乐</span>
   <span id="shot"></span>
 </div>
 <div id="board"></div>
@@ -179,7 +180,7 @@ const FIG = {
 // ============================================================
 // 着色器：方块按法线方向取三种明度（纪念碑谷的平涂光），并做「高度雾」让柱子沉入天色
 // ============================================================
-const U = { fogC: { value: new THREE.Color('#fff') }, fogLo: { value: -10 }, fogHi: { value: -2 }, desat: { value: 0 } };
+const U = { fogC: { value: new THREE.Color('#fff') }, fogLo: { value: -10 }, fogHi: { value: -2 }, desat: { value: 0 }, beat: { value: 0 } };
 const VS = `varying vec3 vN; varying vec3 vW;
 void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz;
   vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
@@ -191,9 +192,9 @@ vec3 post(vec3 c){
   float g = dot(c, vec3(.299, .587, .114));
   return mix(c, vec3(g) * .9 + .07, desat);
 }`;
-const FS_FACE = `uniform vec3 cTop, cL, cR, cD; ${POST}
+const FS_FACE = `uniform vec3 cTop, cL, cR, cD; uniform float beat; ${POST}
 void main(){ vec3 n = normalize(vN); vec3 c;
-  if (n.y > .6) c = cTop; else if (n.y < -.6) c = cD;
+  if (n.y > .6) c = mix(cTop, vec3(1.), beat * .22); else if (n.y < -.6) c = cD;
   else if (abs(n.z) >= abs(n.x)) c = n.z > 0. ? cL : mix(cR, cD, .35);
   else c = n.x > 0. ? cR : mix(cL, cD, .25);
   gl_FragColor = vec4(post(c), opacity); }`;
@@ -201,7 +202,7 @@ const FS_SMOOTH = `uniform vec3 base, shade; ${POST}
 void main(){ vec3 n = normalize(vN);
   float l = dot(n, normalize(vec3(-.35, .9, .45)));
   gl_FragColor = vec4(post(mix(shade, base, smoothstep(-.35, .85, l))), opacity); }`;
-const common = (o = {}) => ({ fogC: U.fogC, fogLo: U.fogLo, fogHi: U.fogHi, desat: U.desat,
+const common = (o = {}) => ({ fogC: U.fogC, fogLo: U.fogLo, fogHi: U.fogHi, desat: U.desat, beat: U.beat,
   tint: { value: new THREE.Color(o.tint || '#ffffff') }, tintK: { value: 0 }, opacity: { value: o.opacity ?? 1 } });
 function faceMat(p, o = {}) {
   return new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS_FACE, transparent: !!o.transparent,
@@ -305,7 +306,10 @@ function makeFigure(kind, o = {}) {
   return g;
 }
 // 姿态：walk = 步伐相位（null 表示站立），sit = 0..1 坐下，dip = 低头
-function pose(fig, pos, yaw, { walk = null, sit = 0, dip = 0, opacity = 1, visible = true } = {}) {
+// beatLock：走路时脚步对齐音乐节拍（慢歌每拍两步，快歌每拍一步）
+let NOW = 0;
+function pose(fig, pos, yaw, { walk = null, sit = 0, dip = 0, opacity = 1, visible = true, beatLock = true } = {}) {
+  if (walk != null && beatLock) walk = beatPos(NOW) * (BEAT.bpm < 105 ? 2 : 1) + (fig === you ? .5 : 0);
   fig.visible = visible && opacity > .01;
   fig.position.copy(pos); fig.rotation.y = yaw;
   const { body, hat, feet, mats } = fig.userData;
@@ -486,13 +490,15 @@ function buildD(n) {
   const halo = mesh(g, G.sphere, flatMat(P.accent, { transparent: true, opacity: .22, ghost: true }), 0, 0, 0, .32);
   const fr = flatMat('#C9D2FF', { transparent: true, opacity: 0 });
   const farRipple = mesh(g, G.ring, fr, far, .02, -far, 1);
+  const br = flatMat('#E9EEFF', { transparent: true, opacity: 0 });
+  const beatRing = mesh(g, G.ring, br, 0, .03, 0, 1);
   // 远景剪影
   const sil = faceMat({ top: '#56609F', left: '#3B447F', right: '#2B3368', dark: '#232A5A' });
   const ruin = (x, z, h, s) => { box(g, sil, x, -1, h, z, s, s); mesh(g, G.hemi, smoothMat('#56609F', '#2B3368'), x, h, z, s * .45); };
   for (let j = 0; j * 3 <= n + 3; j++) { const b = j * 3 * 1.6; ruin(b - 3.6 - (j % 2) * 1.5, -b - 3.6 - (j % 2) * 1.5, 1.6 + (j % 3) * .9, 1 + (j % 2) * .4); }
   ruin(far - 3.2, -far - 4.2, 2.8, 1.5);
   scene.add(g);
-  D = { g, pillars, ripples, rm, farG, lantern, halo, farRipple, fr, n, far };
+  D = { g, pillars, ripples, rm, farG, lantern, halo, farRipple, fr, n, far, br, beatRing };
 }
 function buildE(n) {
   disposeGroup(E?.g);
@@ -534,6 +540,147 @@ function buildE(n) {
   }
   scene.add(g);
   E = { g, steps, pos: pos.map(p => V(...p)), n, summit: V(sx, top, sz), debris, clouds };
+}
+
+// ============================================================
+// 音乐节奏：从音乐文件分析出节拍、强拍（每小节第一拍）和响度 —— 让画面「卡点」
+//   频谱通量求起音包络 → 自相关估速度 → 动态规划追踪每一拍（Ellis 2007）→ 低频能量定强拍
+// ============================================================
+const BEAT = { has: false, bpm: 76, beats: [], down: [], env: null, envRate: 1 };
+const FFT_N = 1024;
+const FFT_REV = new Uint16Array(FFT_N);
+for (let i = 1; i < FFT_N; i++) FFT_REV[i] = (FFT_REV[i >> 1] >> 1) | (i & 1 ? FFT_N >> 1 : 0);
+const TW_R = Float32Array.from({ length: FFT_N / 2 }, (_, k) => Math.cos(2 * Math.PI * k / FFT_N));
+const TW_I = Float32Array.from({ length: FFT_N / 2 }, (_, k) => -Math.sin(2 * Math.PI * k / FFT_N));
+function fft(re, im) {
+  for (let i = 0; i < FFT_N; i++) {
+    const j = FFT_REV[i];
+    if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (let size = 2; size <= FFT_N; size <<= 1) {
+    const half = size >> 1, step = FFT_N / size;
+    for (let i = 0; i < FFT_N; i += size) for (let j = 0, k = 0; j < half; j++, k += step) {
+      const a = i + j, b = a + half;
+      const tr = re[b] * TW_R[k] - im[b] * TW_I[k], ti = re[b] * TW_I[k] + im[b] * TW_R[k];
+      re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+    }
+  }
+}
+async function analyzeAudio(buf) {
+  const ab = await new OfflineAudioContext(1, 1, 44100).decodeAudioData(buf);
+  const sr = ab.sampleRate, len = ab.length, mono = new Float32Array(len);
+  for (let c = 0; c < ab.numberOfChannels; c++) {
+    const d = ab.getChannelData(c);
+    for (let i = 0; i < len; i++) mono[i] += d[i] / ab.numberOfChannels;
+  }
+  const N = FFT_N, hop = 512, nf = Math.max(8, Math.floor((len - N) / hop)), fr = sr / hop;
+  const win = Float32Array.from({ length: N }, (_, i) => .5 - .5 * Math.cos(2 * Math.PI * i / N));
+  const re = new Float32Array(N), im = new Float32Array(N), prev = new Float32Array(N / 2);
+  const flux = new Float32Array(nf), lowF = new Float32Array(nf), rms = new Float32Array(nf);
+  const lowBin = Math.max(2, Math.round(160 / (sr / N)));
+  for (let f = 0; f < nf; f++) {
+    const o = f * hop; let e = 0;
+    for (let i = 0; i < N; i++) { const x = mono[o + i] || 0; re[i] = x * win[i]; im[i] = 0; e += x * x; }
+    rms[f] = Math.sqrt(e / N);
+    fft(re, im);
+    let fl = 0, lo = 0;
+    for (let k = 1; k < N / 2; k++) {
+      const m = Math.log1p(100 * Math.hypot(re[k], im[k])), dl = m - prev[k];
+      if (dl > 0) { fl += dl; if (k <= lowBin) lo += dl; }
+      prev[k] = m;
+    }
+    flux[f] = fl; lowF[f] = lo;
+  }
+  // 起音包络：减去局部均值、只留正值、按标准差归一
+  const ps = new Float64Array(nf + 1); for (let i = 0; i < nf; i++) ps[i + 1] = ps[i] + flux[i];
+  const W2 = Math.round(fr * .25), onset = new Float32Array(nf);
+  for (let f = 0; f < nf; f++) { const a = Math.max(0, f - W2), b = Math.min(nf, f + W2 + 1); onset[f] = Math.max(0, flux[f] - (ps[b] - ps[a]) / (b - a)); }
+  let sd = 0; for (const v of onset) sd += v * v; sd = Math.sqrt(sd / nf) || 1;
+  for (let f = 0; f < nf; f++) onset[f] /= sd;
+  // 速度：起音包络自相关，乘以 100 BPM 为中心的对数高斯先验
+  const ac = new Float32Array(Math.ceil(fr * 60 / 50) + 2);
+  let bestLag = 0, best = -1;
+  for (let lag = Math.round(fr * 60 / 180); lag <= Math.round(fr * 60 / 55); lag++) {
+    let s = 0; for (let t = 0; t + lag < nf; t++) s += onset[t] * onset[t + lag];
+    ac[lag] = s;
+    const w = Math.exp(-.5 * (Math.log2(60 * fr / lag / 100) / .9) ** 2);
+    if (s * w > best) { best = s * w; bestLag = lag; }
+  }
+  const a0 = ac[bestLag - 1], a1 = ac[bestLag], a2 = ac[bestLag + 1], den = a0 - 2 * a1 + a2;
+  const period = bestLag + (den < 0 ? .5 * (a0 - a2) / den : 0);
+  // 节拍追踪：动态规划，在「落在起音上」和「间隔接近一拍」之间取最优
+  const g = Math.max(1, period / 32), local = new Float32Array(nf);
+  for (let f = 0; f < nf; f++) { let s = 0, ws = 0; for (let d = -3; d <= 3; d++) { const k = Math.exp(-.5 * (d / g) ** 2), v = onset[f + d]; if (v != null) { s += v * k; ws += k; } } local[f] = s / ws; }
+  const score = new Float32Array(nf), back = new Int32Array(nf).fill(-1);
+  const lo = Math.round(period / 2), hi = Math.round(period * 2);
+  for (let t = 0; t < nf; t++) {
+    let bv = -Infinity, bi = -1;
+    for (let p = Math.max(0, t - hi); p <= t - lo; p++) {
+      const v = score[p] - 100 * Math.log((t - p) / period) ** 2;
+      if (v > bv) { bv = v; bi = p; }
+    }
+    score[t] = local[t] + (bi >= 0 ? bv : 0); back[t] = bi;
+  }
+  let end = nf - 1; for (let t = Math.max(0, nf - Math.round(period)); t < nf; t++) if (score[t] > score[end]) end = t;
+  const fb = []; for (let t = end; t >= 0; t = back[t]) fb.unshift(t);
+  // 去掉开头和结尾没有音乐的「空拍」
+  let ls = 0; for (const f of fb) ls += local[f] ** 2; const thr = .5 * Math.sqrt(ls / fb.length);
+  while (fb.length > 4 && local[fb[0]] < thr) fb.shift();
+  while (fb.length > 4 && local[fb[fb.length - 1]] < thr) fb.pop();
+  const toT = f => (f * hop + N / 2) / sr;
+  // 强拍：四拍一小节，取低频起音最强的相位
+  let lsd = 0; for (const v of lowF) lsd += v * v; lsd = Math.sqrt(lsd / nf) || 1;
+  let phase = 0, pb = -1;
+  for (let ph = 0; ph < 4; ph++) { let s = 0; for (let i = ph; i < fb.length; i += 4) s += lowF[fb[i]] / lsd + local[fb[i]] * .3; if (s > pb) { pb = s; phase = ph; } }
+  // 响度包络（约 0.5 秒平滑，按 10%–95% 分位归一到 0~1）
+  const Wr = Math.round(fr * .25), env = new Float32Array(nf), pr = new Float64Array(nf + 1);
+  for (let i = 0; i < nf; i++) pr[i + 1] = pr[i] + rms[i];
+  for (let f = 0; f < nf; f++) { const a = Math.max(0, f - Wr), b = Math.min(nf, f + Wr + 1); env[f] = (pr[b] - pr[a]) / (b - a); }
+  const sorted = Float32Array.from(env).sort(), q = p => sorted[Math.floor(p * (nf - 1))];
+  const e10 = q(.1), e95 = q(.95);
+  for (let f = 0; f < nf; f++) env[f] = clamp((env[f] - e10) / ((e95 - e10) || 1));
+  Object.assign(BEAT, { has: true, bpm: 60 * fr / period, beats: fb.map(toT), down: fb.map((_, i) => (i - phase) % 4 === 0), env, envRate: fr });
+  return { duration: ab.duration, bpm: BEAT.bpm, beats: BEAT.beats.length };
+}
+// 没有音乐时用一个示意节拍网格，让画面依然有节奏
+function defaultBeatGrid(duration) {
+  if (BEAT.has) return;
+  const p = 60 / BEAT.bpm, beats = [];
+  for (let t = .5; t < duration; t += p) beats.push(t);
+  Object.assign(BEAT, { beats, down: beats.map((_, i) => i % 4 === 0), env: null });
+}
+function beatIdx(t) {
+  const b = BEAT.beats; if (!b.length || t < b[0]) return -1;
+  let lo = 0, hi = b.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (b[m] <= t) lo = m; else hi = m - 1; }
+  return lo;
+}
+const beatDur = () => 60 / BEAT.bpm;
+function beatPos(t) {
+  const b = BEAT.beats, i = beatIdx(t);
+  if (i < 0) return b.length ? (t - b[0]) / beatDur() : t / beatDur();
+  return i + (t - b[i]) / ((b[i + 1] ?? b[i] + beatDur()) - b[i]);
+}
+const punch = x => x < 0 ? 0 : x < .035 ? x / .035 : Math.exp(-(x - .035) * 7);
+function beatPulse(t) { const i = beatIdx(t); return i < 0 ? 0 : punch(t - BEAT.beats[i]) * (BEAT.down[i] ? 1 : .5); }
+function downPulse(t) { const i = beatIdx(t); return i < 0 || !BEAT.down[i] ? 0 : punch(t - BEAT.beats[i]); }
+function lastDown(t) { for (let i = beatIdx(t); i >= 0; i--) if (BEAT.down[i]) return BEAT.beats[i]; return -1e9; }
+function energy(t) { return BEAT.env ? BEAT.env[clamp(Math.floor(t * BEAT.envRate), 0, BEAT.env.length - 1)] : .6; }
+// 把事件对齐到最近的拍点（相差不超过 maxD 秒时）
+function snapBeat(t, maxD = .3) {
+  const b = BEAT.beats, i = beatIdx(t); let best = t, bd = maxD;
+  for (const j of [i, i + 1]) if (b[j] != null && Math.abs(b[j] - t) < bd) { bd = Math.abs(b[j] - t); best = b[j]; }
+  return best;
+}
+const nextBeat = t => BEAT.beats[beatIdx(t) + 1] ?? t;
+// 段落起点对齐到小节线：只往前找（不超过一小节），保证这一段的第一句歌词仍在段内
+function snapToBar(t, lineT = null) {
+  const lim = lineT ?? t + 4 * beatDur() * .5;
+  for (let i = beatIdx(lim + .12); i >= 0; i--) {
+    const b = BEAT.beats[i]; if (lim - b > 4 * beatDur()) break;
+    if (BEAT.down[i] && Math.abs(b - t) < 4 * beatDur() * .75) return b;
+  }
+  return t;
 }
 
 // ============================================================
@@ -593,6 +740,11 @@ function buildTimeline(parsed, duration) {
     if (CONFIG.sections.length >= 10 && !duration) dur = CONFIG.sections[9];
   } else if (has) { starts = detectSections(parsed.lines, dur); if (starts) mode = '按歌词自动对齐'; }
   if (!starts) starts = DEFAULT_STARTS.map(s => s * dur / DEFAULT_DUR);
+  if (!BEAT.has) { BEAT.beats = []; defaultBeatGrid(dur); }
+  if (BEAT.beats.length) for (let i = 1; i < 9; i++) {
+    const onLine = has && parsed.lines.some(l => Math.abs(l.t - starts[i]) < .05);
+    starts[i] = snapToBar(starts[i], onLine ? starts[i] : null);
+  }
   for (let i = 1; i < 9; i++) starts[i] = Math.max(starts[i], starts[i - 1] + .5);
   const secs = SEC_KEYS.map((key, i) => ({ key, start: starts[i], end: i < 8 ? starts[i + 1] : dur, lines: [] }));
   let lines;
@@ -715,38 +867,41 @@ function loopPosU(d) { const lap = Math.floor(d / B.L); return B.path.at(d - lap
 const loopYaw = d => { const a = loopPosU(d - .25), b = loopPosU(d + .25); return Math.atan2(b.x - a.x, b.z - a.z); };
 function v2State(t) {
   const sec = TL.by.v2, dur = sec.end - sec.start, lines = sec.lines.slice(0, D.n);
-  const rise = k => k === 0 ? -1e9 : (lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.1 + .55 * k / D.n));
-  const HOP = 1.0, HOP_DUR = .6;   // 石柱升起 1 秒后起跳，跳 0.6 秒
+  const rise = k => k === 0 ? -1e9 : snapBeat(lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.1 + .55 * k / D.n));
+  // 石柱在拍点升起；等它升稳后，在下一个拍点起跳，用一拍跳过去、落在拍上
+  const HOP_DUR = clamp(beatDur(), .45, .8), hopStart = k => nextBeat(rise(k) + .75);
   let at = 0;
-  for (let k = 1; k <= D.n; k++) if (t >= rise(k) + HOP + HOP_DUR) at = k;
+  for (let k = 1; k <= D.n; k++) if (t >= hopStart(k) + HOP_DUR) at = k;
   const top = k => V(k * 1.6, .55, -k * 1.6);
   let pos = top(at), walk = null;
-  const hopT = rise(at + 1) + HOP;
+  const hopT = hopStart(at + 1);
   if (at < D.n && t > hopT) {
     const k = clamp((t - hopT) / HOP_DUR); pos = top(at).lerp(top(at + 1), ease.inOut(k)); pos.y += Math.sin(Math.PI * k) * .7;
     walk = k * 4;
   }
-  return { pos, walk, rise };
+  return { pos, walk, rise, at, top };
 }
 function c3State(t) {
   const sec = TL.by.c3, dur = sec.end - sec.start, lines = sec.lines.slice(0, E.n), last = sec.end - 4.3;
-  const rise = k => k === 0 ? -1e9 : Math.min(lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.06 + .62 * k / E.n), last - (E.n - k) * .35);
-  const CLIMB = 1.1, CLIMB_DUR = .55;   // 台阶升起 1.1 秒后迈上去，用时 0.55 秒
+  const rise = k => k === 0 ? -1e9 : snapBeat(Math.min(lines[k - 1] ? lines[k - 1].t : sec.start + dur * (.06 + .62 * k / E.n), last - (E.n - k) * .35));
+  // 台阶在拍点升起；升稳后在下一个拍点迈上去，落脚在拍上
+  const CLIMB_DUR = clamp(beatDur() * .75, .4, .7), climbStart = k => nextBeat(rise(k) + .85);
   let at = 0;
-  for (let k = 1; k <= E.n; k++) if (t >= rise(k) + CLIMB + CLIMB_DUR) at = k;
+  for (let k = 1; k <= E.n; k++) if (t >= climbStart(k) + CLIMB_DUR) at = k;
   const rel = (lines.find(l => /自由|飞/.test(l.text)) || {}).t;
   const release = Math.min(rel ?? sec.start + dur * .6, sec.end - 3);
   const summitT = Math.min(Math.max(rise(E.n) + 2.2, release + 1.6), sec.end - 2.4);
   const sp = E.summit.clone().add(V(0, 0, .45));
   let pos = E.pos[at].clone(), walk = null;
-  const climbT = rise(at + 1) + CLIMB;
-  if (at < E.n && t > climbT) { const k = clamp((t - climbT) / CLIMB_DUR); pos.lerp(E.pos[at + 1], ease.inOut(k)); walk = k * 2.5; }
+  const climbT = climbStart(at + 1);
+  let climbing = false;
+  if (at < E.n && t > climbT) { const k = clamp((t - climbT) / CLIMB_DUR); pos.lerp(E.pos[at + 1], ease.inOut(k)); pos.y += Math.sin(Math.PI * k) * .25; walk = k * 2; climbing = true; }
   const onTop = at === E.n && t > summitT;
   if (onTop) {
     const k = clamp((t - summitT) / 1.6), p2 = new Path([E.pos[E.n], sp]);
     pos = p2.at(p2.len * ease.inOut(k)).pos; walk = k < 1 ? k * p2.len / STEP : null;
   }
-  return { pos, walk, at, rise, release, summitT, onTop, sp };
+  return { pos, walk, at, rise, release, summitT, onTop, sp, climbing };
 }
 
 const ACT = {
@@ -840,7 +995,11 @@ const ACT = {
       D.rm[k].uniforms.opacity.value = k && t > rt ? .7 * (1 - smooth(rt, rt + 2.6, t)) : 0;
       D.ripples[k].scale.setScalar(.6 + 2.6 * smooth(rt, rt + 2.6, t));
     }
-    pose(ida, st.pos, Math.atan2(1, -1), { walk: st.walk });
+    pose(ida, st.pos, Math.atan2(1, -1), { walk: st.walk, beatLock: false });
+    // 每个强拍，她脚下的水面荡开一圈
+    const ld = lastDown(t), age = t - ld, bp = st.top(st.at);
+    D.br.uniforms.opacity.value = .55 * (1 - smooth(0, 1.8, age)) * (age >= 0 ? 1 : 0);
+    D.beatRing.position.set(bp.x, .03, bp.z); D.beatRing.scale.setScalar(.7 + 2.2 * ease.out(clamp(age / 1.8)));
     // 远方的「你」与灯
     const sink = smooth(.86, .98, u);
     D.farG.position.y = -6.5 * ease.inOut(sink);
@@ -892,7 +1051,7 @@ const ACT = {
     if (st.onTop) fb = Math.atan2(st.sp.x - E.pos[E.n].x, st.sp.z - E.pos[E.n].z);
     let yaw = headingOf(tt => c3State(tt).pos, t, .12, fb);
     yaw = lerpAng(yaw, Math.PI, smooth(st.summitT + 1.6, st.summitT + 2.3, t));
-    pose(ida, st.pos, yaw, { walk: st.walk });
+    pose(ida, st.pos, yaw, { walk: st.walk, beatLock: !st.climbing });
     const youPos = E.summit.clone().add(V(.15, 0, -.25)), pn = E.pos[E.n];
     pose(you, youPos, Math.atan2(pn.x - youPos.x, pn.z - youPos.z), { opacity: 1 - smooth(st.release, st.release + 1.2, t), dip: bell(t, st.release - 2, st.release) * .4 });
     E.debris.forEach(o => { o.dg.position.y = o.y0 + Math.sin(t * .4 + o.ph) * .25; });
@@ -967,6 +1126,7 @@ function spacedText(txt, x, y, size, weight, color, spacing, alpha = 1, shadow =
   const w = g2.measureText(txt).width, maxW = W * .88;
   if (w > maxW) { g2.font = `${weight} ${size * maxW / w}px ${FONT}`; }
   g2.fillText(txt, x + spacing / 2, y); g2.restore();
+  return Math.min(w, maxW);
 }
 function sectionAt(t) {
   const s = TL.sections; for (let i = s.length - 1; i >= 0; i--) if (t >= s[i].start) return s[i]; return s[0];
@@ -981,8 +1141,15 @@ function runAct(sec, t) {
   you.visible = false; pose(ghost, V(0, -99, 0), 0, { opacity: 0, visible: false });
   U.desat.value = 0; B.mats[0].uniforms.tintK.value = 0;
   const dur = sec.end - sec.start, u = clamp((t - sec.start) / dur);
+  NOW = t;
   const r = ACT[sec.key]({ t, u, sec, dur });
   r.sec = sec; r.u = u; r.textC = r.text || r.pal.text; r.sky = r.sky || r.pal.sky;
+  // 卡点：每拍镜头轻推一下，强拍更重、副歌更重、越响越重；副歌强拍再加一点左右摆
+  const gain = BEAT_GAIN[sec.key] ?? 1, e = energy(t), bp = beatPulse(t);
+  r.cam.size *= 1 - gain * (.012 + .03 * e) * bp;
+  if (gain > 1.2) r.cam.roll = (r.cam.roll || 0) + (Math.floor(beatIdx(t) / 4) % 2 ? 1 : -1) * downPulse(t) * e;
+  U.beat.value = Math.min(1, gain * (.35 + .75 * e) * bp);
+  r.flash = gain > 1.2 ? downPulse(t) * e : 0;
   return r;
 }
 function mixCam(a, b, k) {
@@ -993,6 +1160,7 @@ function mixCam(a, b, k) {
   }
   return o;
 }
+const BEAT_GAIN = { intro: .5, v1: .8, c1: 1.5, inter1: .8, v2: .9, c2: 1.7, bridge: .45, c3: 1.6, outro: .6 };
 const transHalf = (a, b) => Math.min(.9, .3 * (a.end - a.start), .3 * (b.end - b.start));
 const handoff = sec => Math.min(3, .4 * (sec.end - sec.start));
 const buf = document.createElement('canvas'); buf.width = W; buf.height = H;
@@ -1013,7 +1181,8 @@ function drawScene(r, t) {
   const grd = g2.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, sky[0]); grd.addColorStop(1, sky[1]);
   g2.globalAlpha = 1; g2.fillStyle = grd; g2.fillRect(0, 0, W, H);
   if (r.night) {
-    for (const [x, y, s, ph] of STARS) { g2.globalAlpha = .35 + .45 * (.5 + .5 * Math.sin(t * 1.3 + ph)); g2.fillStyle = '#FFF6E0'; g2.fillRect(x * W, y * H, s, s); }
+    const bp = beatPulse(t);
+    for (const [x, y, s, ph] of STARS) { g2.globalAlpha = Math.min(1, .35 + .45 * (.5 + .5 * Math.sin(t * 1.3 + ph)) + .35 * bp * (ph > 3 ? 1 : 0)); g2.fillStyle = '#FFF6E0'; g2.fillRect(x * W, y * H, s, s); }
     g2.globalAlpha = 1;
     const mx = W * (PORTRAIT ? .72 : .8), my = H * .17, mr = Math.min(W, H) * .055;
     const mg = g2.createRadialGradient(mx, my, mr * .6, mx, my, mr * 4); mg.addColorStop(0, 'rgba(255,240,210,.35)'); mg.addColorStop(1, 'rgba(255,240,210,0)');
@@ -1080,6 +1249,12 @@ function drawScene(r, t) {
       g2.moveTo(px, py); g2.lineTo(px - H * .008, py + H * .045 * s);
     }
     g2.stroke(); g2.globalAlpha = 1;
+  }
+  // 副歌强拍：一层柔光
+  if (r.flash > .01) {
+    const fg = g2.createRadialGradient(W * .5, H * .1, 0, W * .5, H * .1, W * .7);
+    fg.addColorStop(0, `rgba(255,248,236,${.16 * r.flash})`); fg.addColorStop(1, 'rgba(255,248,236,0)');
+    g2.fillStyle = fg; g2.fillRect(0, 0, W, H);
   }
   // 「笑/光」→ 暖光
   if (cur && /笑|阳光|光|晴/.test(cur.text)) {
@@ -1156,7 +1331,12 @@ function renderFrame(t) {
     const band = g2.createLinearGradient(0, ly - bh, 0, ly + bh);
     band.addColorStop(0, `rgba(${rgb},0)`); band.addColorStop(.5, `rgba(${rgb},${.5 * a})`); band.addColorStop(1, `rgba(${rgb},0)`);
     g2.fillStyle = band; g2.fillRect(0, ly - bh, W, bh * 2);
-    spacedText(cur.text, W / 2, ly, unit * (PORTRAIT ? .05 : .042), 500, textC, sp, a, shadowC);
+    const fs = unit * (PORTRAIT ? .05 : .042), lift = downPulse(t) * unit * .005;
+    const prog = clamp((t - cur.t) / Math.max(.6, (cur.end - cur.t) * .9));
+    const tw = spacedText(cur.text, W / 2, ly - lift, fs, 500, textC, sp, a * .38, null);
+    g2.save(); g2.beginPath(); g2.rect(W / 2 - tw / 2 - fs, ly - fs * 1.5, (tw + fs) * prog + fs * .5, fs * 3); g2.clip();
+    spacedText(cur.text, W / 2, ly - lift, fs, 500, textC, sp, a, shadowC);
+    g2.restore();
   }
   // 片尾
   if (main.end) {
@@ -1210,6 +1390,10 @@ async function handleFile(f) {
   if (/\.(lrc|txt)$/i.test(f.name)) return loadLRC(await f.text());
   audio.src = URL.createObjectURL(f);
   audio.onloadedmetadata = () => setDuration(audio.duration);
+  $('bpm').textContent = '♩ 正在分析节拍…';
+  const info = await analyzeAudio(await f.arrayBuffer());
+  $('bpm').textContent = `♩ ${info.bpm.toFixed(0)} BPM · ${info.beats} 拍`;
+  setTimeline(parsed, audioDur ?? info.duration);
 }
 $('fAudio').onchange = e => handleFile(e.target.files[0]);
 $('fLrc').onchange = e => handleFile(e.target.files[0]);
@@ -1280,9 +1464,17 @@ function loop() {
 window.MV = {
   ready: loadFonts(BASE_TEXT),
   loadLRC, setDuration,
+  loadAudio: async b64 => {
+    const bin = atob(b64), arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const info = await analyzeAudio(arr.buffer);
+    audioDur = audioDur ?? info.duration; setTimeline(parsed, audioDur);
+    return info;
+  },
+  beats: () => ({ bpm: BEAT.bpm, beats: BEAT.beats, down: BEAT.down }),
   renderFrame: t => { renderFrame(t); return true; },
   camTrace,
-  timeline: () => ({ duration: TL.duration, mode: TL.mode, sections: TL.sections.map(s => ({ key: s.key, start: s.start, end: s.end, lines: s.lines.length })) }),
+  timeline: () => ({ duration: TL.duration, mode: TL.mode, bpm: BEAT.has ? BEAT.bpm : null, sections: TL.sections.map(s => ({ key: s.key, start: s.start, end: s.end, lines: s.lines.length })) }),
 };
 if (CONFIG.renderMode) document.body.classList.add('render');
 if (CONFIG.renderMode || CONFIG.freezeAt != null) { window.MV.ready.then(() => { renderFrame(curT); document.body.dataset.ready = '1'; }); }
