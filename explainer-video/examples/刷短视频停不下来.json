@@ -1,0 +1,126 @@
+{
+  "title": "为什么你刷短视频停不下来",
+  "hud_title": "刷视频为什么停不下来",
+  "brand": "@你的账号名",
+  "format": "9:16",
+  "voice": "zh-CN-YunxiNeural",
+  "rate": "+8%",
+  "accent": "#A78BFA",
+  "bg": "stars",
+  "keywords": ["多巴胺", "随机奖励", "无限下滑"],
+  "cover": { "text": "刷视频停不下来\n真不怪你", "highlight": "不怪你", "sub": "藏在手机里的三个机关" },
+  "sources": [
+    "中国网络视听发展研究报告(2026)：2025年12月网络视听用户人均单日使用时长201分钟 https://www.news.cn/politics/20260416/cac5d121fdbf4dd88a92f22bc2218e9d/c.html",
+    "斯金纳的可变比率强化实验（随机奖励让行为最难消退）",
+    "无限下滑的设计者 Aza Raskin 后来公开表示后悔（BBC 2018）"
+  ],
+  "sections": [
+    {
+      "name": "钩子",
+      "label": "开场",
+      "scenes": [
+        {
+          "type": "headline",
+          "impact": true,
+          "kicker": "反常识",
+          "text": "刷视频停不下来\n真不怪你",
+          "highlight": "不怪你",
+          "say": ["刷短视频停不下来", "真不怪你"]
+        },
+        {
+          "type": "headline",
+          "icon": "smartphone",
+          "text": "你手机里\n藏着三个机关",
+          "highlight": "三个机关",
+          "say": ["因为你的手机里", "藏着三个专门设计的机关", "看完这条你就能看穿它"]
+        }
+      ]
+    },
+    {
+      "name": "解释",
+      "label": "原理",
+      "scenes": [
+        {
+          "type": "number",
+          "value": "201",
+          "unit": "分钟",
+          "prefix": "2025年",
+          "label": "我国网民平均每天看视频",
+          "highlight": "每天",
+          "say": ["先看一个数字", "我国网民平均每天", "要看两百多分钟视频"]
+        },
+        {
+          "type": "compare",
+          "mode": "fix",
+          "left": { "title": "你以为", "icon": "smile", "label": "快乐" },
+          "right": { "title": "其实是", "icon": "brain", "label": "期待" },
+          "highlight": ["多巴胺", "期待"],
+          "say": ["第一个机关叫多巴胺", "很多人以为它管快乐", "其实它管的是期待", "下一条会不会更好看？"]
+        },
+        {
+          "type": "icons",
+          "items": [
+            { "icon": "meh", "label": "很无聊" },
+            { "icon": "laugh", "label": "笑出声" },
+            { "icon": "sparkles", "label": "被惊艳", "hl": true }
+          ],
+          "highlight": "随机奖励",
+          "say": ["第二个机关叫随机奖励", "下一条可能很无聊", "也可能让你笑出声", "正因为猜不到，你才忍不住再划一下"]
+        },
+        {
+          "type": "headline",
+          "icon": "dices",
+          "kicker": "老虎机原理",
+          "text": "奖励越随机\n越难停下来",
+          "highlight": "越难停下来",
+          "say": ["心理学家斯金纳早就发现", "奖励越随机", "动物就越停不下来"]
+        },
+        {
+          "type": "headline",
+          "icon": "infinity",
+          "text": "刷不到底\n就没理由停",
+          "highlight": "刷不到底",
+          "sub": "无限下滑的设计者，后来公开说过后悔",
+          "say": ["第三个机关是无限下滑", "视频永远刷不到底", "大脑就收不到该停了的信号"]
+        },
+        {
+          "type": "cycle",
+          "steps": [
+            { "icon": "hand", "label": "划一下" },
+            { "icon": "sparkles", "label": "期待" },
+            { "icon": "gift", "label": "偶尔惊喜" },
+            { "icon": "repeat", "label": "想要更多", "hl": true }
+          ],
+          "center": "停不下来",
+          "highlight": "停不下来",
+          "say": ["三个机关连在一起", "划一下，期待一下", "偶尔给你一点惊喜", "你就想要更多", "一圈一圈，停不下来"]
+        }
+      ]
+    },
+    {
+      "name": "结尾",
+      "label": "解法",
+      "scenes": [
+        {
+          "type": "list",
+          "title": "三招夺回注意力",
+          "highlight": "夺回",
+          "items": ["关掉推送通知", "刷之前定个闹钟", "睡前把手机放远点"],
+          "say": ["想把时间抢回来", "先关掉推送通知", "刷之前定个闹钟", "睡前把手机放远一点"]
+        },
+        {
+          "type": "quote",
+          "text": "不是你在刷视频\n是视频在刷你",
+          "highlight": "视频在刷你",
+          "say": ["最后记住一句话", "不是你在刷视频", "而是视频在刷你"]
+        },
+        {
+          "type": "cta",
+          "text": "关注我",
+          "next": "为什么一到晚上就不想睡",
+          "say": ["关注我", "下期聊聊", "为什么一到晚上就不想睡"]
+        }
+      ]
+    }
+  ]
+}

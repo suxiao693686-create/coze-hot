@@ -1,0 +1,193 @@
+/* 黑底白线讲解视频 · 版式
+ * 竖屏 1080×1920、横屏 1920×1080，两者短边都是 1080，所以尺寸直接用 px。 */
+:root {
+  --accent: #a78bfa;
+  --glow: rgba(167, 139, 250, .55);
+  --glow2: rgba(167, 139, 250, .25);
+  --white: #f4f4f7;
+  --dim: rgba(244, 244, 247, .45);
+  --font: "VS", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Zen Hei", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #000; overflow: hidden; }
+#stage {
+  position: relative; overflow: hidden; background: #040407;
+  font-family: var(--font); color: var(--white);
+  -webkit-font-smoothing: antialiased;
+}
+#bg { position: absolute; inset: 0; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+
+/* ---------- 场景容器 ---------- */
+.scene { position: absolute; display: flex; align-items: center; justify-content: center; }
+.inner { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 44px; }
+.portrait .scene { left: 60px; top: 300px; width: 960px; height: 1000px; }
+.landscape .scene { left: 140px; top: 120px; width: 1640px; height: 690px; }
+.landscape .inner { gap: 34px; }
+
+/* 线条：所有图形只描边不填充 */
+svg.ico { overflow: visible; fill: none; stroke: var(--white); stroke-linecap: round; stroke-linejoin: round; }
+svg.ico text { fill: var(--white); stroke: none; font-family: var(--font); font-weight: 900; }
+svg.ico .a, svg.ico.accent, .on svg.ico, .accent-stroke { stroke: var(--accent); }
+svg.ico .a text, svg.ico text.a { fill: var(--accent); }
+.glow, .on svg.ico, svg.ico.accent { filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 28px var(--glow2)); }
+.glow-soft { filter: drop-shadow(0 0 14px rgba(255, 255, 255, .22)); }
+
+.hl { color: var(--accent); text-shadow: 0 0 18px var(--glow), 0 0 44px var(--glow2); }
+
+/* ---------- 文字 ---------- */
+.kicker {
+  font-size: 44px; font-weight: 500; letter-spacing: .3em; color: var(--accent);
+  display: flex; align-items: center; gap: 22px; text-shadow: 0 0 16px var(--glow2);
+}
+.kicker::before, .kicker::after { content: ""; width: 70px; height: 3px; background: var(--accent); box-shadow: 0 0 10px var(--glow); }
+.headline { font-weight: 900; line-height: 1.22; text-align: center; letter-spacing: .02em; }
+.hline { white-space: nowrap; }
+.big-label { font-weight: 900; text-align: center; line-height: 1.25; white-space: nowrap; }
+.sub-label { font-size: 46px; font-weight: 500; color: var(--dim); text-align: center; line-height: 1.45; max-width: 900px; }
+.landscape .sub-label { max-width: 1300px; }
+
+/* ---------- 数字 ---------- */
+.num-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+.num-wrap svg { position: absolute; inset: 0; }
+.ring circle { fill: none; stroke-linecap: round; }
+.ring .ring-bg { stroke: rgba(255, 255, 255, .14); }
+.ring .ring-fg { stroke: var(--accent); filter: drop-shadow(0 0 8px var(--glow)); }
+.ring .tick { stroke: rgba(255, 255, 255, .35); }
+.num-inner { position: relative; text-align: center; }
+.num-prefix { font-size: 46px; font-weight: 500; color: var(--dim); margin-bottom: 6px; }
+.num-row { display: flex; align-items: baseline; justify-content: center; gap: 10px; }
+.num-val { font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; color: var(--white); text-shadow: 0 0 30px rgba(255, 255, 255, .25); }
+.num-unit { font-size: 64px; font-weight: 900; color: var(--accent); text-shadow: 0 0 18px var(--glow); }
+
+/* ---------- 图标格子 ---------- */
+.grid { display: grid; gap: 54px 40px; justify-items: center; align-items: start; }
+.portrait .grid.g2 { grid-template-columns: repeat(2, 420px); }
+.portrait .grid.g3 { grid-template-columns: repeat(3, 300px); }
+.portrait .grid.g4 { grid-template-columns: repeat(2, 420px); }
+.portrait .grid.g5, .portrait .grid.g6 { grid-template-columns: repeat(3, 300px); }
+.landscape .grid { grid-auto-flow: column; grid-auto-columns: 300px; }
+.cell { display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center; }
+.cell-label { font-size: 54px; font-weight: 900; line-height: 1.2; }
+.cell-note { font-size: 36px; font-weight: 500; color: var(--dim); line-height: 1.35; margin-top: -12px; }
+.on .cell-label, .on .cmp-label, .on .node-label, .on .cyc-label { color: var(--accent); text-shadow: 0 0 16px var(--glow); }
+
+/* ---------- 对比 ---------- */
+.cmp { display: flex; align-items: center; justify-content: center; }
+.portrait .cmp { flex-direction: column; gap: 30px; }
+.landscape .cmp { flex-direction: row; gap: 90px; }
+.cmp-panel { position: relative; display: flex; align-items: center; gap: 40px; }
+.portrait .cmp-panel { flex-direction: row; width: 880px; justify-content: center; }
+.landscape .cmp-panel { flex-direction: column; width: 600px; }
+.cmp-icon { position: relative; }
+.cmp-icon .strike { position: absolute; inset: -10%; width: 120%; height: 120%; }
+.cmp-text { display: flex; flex-direction: column; gap: 12px; }
+.portrait .cmp-text { align-items: flex-start; max-width: 560px; }
+.landscape .cmp-text { align-items: center; text-align: center; }
+.cmp-tag { font-size: 44px; font-weight: 500; letter-spacing: .2em; color: var(--dim); }
+.on .cmp-tag { color: var(--accent); }
+.cmp-label { font-size: 76px; font-weight: 900; line-height: 1.15; }
+.cmp-note { font-size: 38px; font-weight: 500; color: var(--dim); line-height: 1.35; }
+.cmp-mid { font-size: 64px; font-weight: 900; font-style: italic; color: var(--accent); text-shadow: 0 0 20px var(--glow); }
+.dim { opacity: .5; }
+
+/* ---------- 流程 ---------- */
+.flow { display: flex; align-items: center; }
+.portrait .flow { flex-direction: column; }
+.landscape .flow { flex-direction: row; }
+.node { position: relative; display: flex; align-items: center; justify-content: center; }
+.node svg.frame { position: absolute; inset: 0; overflow: visible; fill: none; stroke: rgba(255, 255, 255, .8); stroke-linecap: round; }
+.on .node svg.frame, .node.on svg.frame { stroke: var(--accent); filter: drop-shadow(0 0 10px var(--glow)); }
+.node-body { position: relative; display: flex; align-items: center; gap: 34px; }
+.landscape .node-body { flex-direction: column; gap: 22px; text-align: center; }
+.node-idx { position: absolute; font-size: 30px; font-weight: 900; color: var(--accent); letter-spacing: .1em; }
+.portrait .node-idx { left: 30px; top: 16px; }
+.landscape .node-idx { left: 22px; top: 14px; }
+.node-label { font-weight: 900; line-height: 1.2; }
+.node-note { font-size: 32px; font-weight: 500; color: var(--dim); margin-top: 6px; }
+.arrow { overflow: visible; fill: none; stroke: var(--dim); stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- 循环 ---------- */
+.cyc { position: relative; }
+.cyc > svg { position: absolute; inset: 0; overflow: visible; fill: none; stroke: rgba(255, 255, 255, .55); stroke-linecap: round; stroke-linejoin: round; }
+.cyc-node { position: absolute; display: flex; align-items: center; justify-content: center; }
+.cyc-node svg.ring-o { position: absolute; inset: 0; overflow: visible; fill: rgba(4, 4, 7, .85); stroke: var(--white); }
+.cyc-node.on svg.ring-o { stroke: var(--accent); filter: drop-shadow(0 0 10px var(--glow)); }
+.cyc-label { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 46px; font-weight: 900; text-align: center; }
+.cyc-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; font-weight: 900; font-size: 64px; line-height: 1.2; white-space: nowrap; }
+
+/* ---------- 列表 ---------- */
+.list-title { font-size: 66px; font-weight: 900; text-align: center; }
+.list { display: flex; flex-direction: column; gap: 54px; }
+.row { display: flex; align-items: center; gap: 36px; }
+.badge { position: relative; width: 104px; height: 104px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 42px; font-weight: 900; color: var(--accent); }
+.badge svg { position: absolute; inset: 0; overflow: visible; fill: none; stroke: var(--accent); filter: drop-shadow(0 0 8px var(--glow)); }
+.row-text { font-size: 66px; font-weight: 900; line-height: 1.25; }
+.row-note { font-size: 36px; font-weight: 500; color: var(--dim); margin-top: 4px; }
+
+/* ---------- 柱状图 ---------- */
+.bars { display: flex; flex-direction: column; gap: 40px; width: 900px; }
+.landscape .bars { width: 1300px; }
+.bar-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+.bar-label { font-size: 48px; font-weight: 900; }
+.bar-val { font-size: 54px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.bar-track { position: relative; height: 34px; border: 2px solid rgba(255, 255, 255, .35); border-radius: 18px; overflow: hidden; }
+.bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, .9)); transform-origin: left center; border-radius: 16px; }
+.bar.on .bar-fill { background: linear-gradient(90deg, rgba(167, 139, 250, .5), var(--accent)); box-shadow: 0 0 22px var(--glow); }
+.bar.on .bar-val, .bar.on .bar-label { color: var(--accent); text-shadow: 0 0 16px var(--glow); }
+
+/* ---------- 金句 ---------- */
+.quote-text { font-weight: 900; line-height: 1.3; text-align: center; }
+.quote-by { font-size: 42px; font-weight: 500; color: var(--dim); letter-spacing: .1em; }
+
+/* ---------- 结尾 ---------- */
+.cta-icons { display: flex; gap: 70px; }
+.cta-text { font-weight: 900; text-align: center; line-height: 1.2; }
+.cta-brand { font-size: 56px; font-weight: 900; color: var(--accent); text-shadow: 0 0 18px var(--glow); }
+.capsule {
+  font-size: 44px; font-weight: 500; padding: 18px 46px; border: 2px solid rgba(255, 255, 255, .5);
+  border-radius: 999px; background: rgba(255, 255, 255, .04);
+}
+.capsule b { color: var(--accent); font-weight: 900; }
+
+/* ---------- 顶部信息条 ---------- */
+#hud { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; }
+.portrait #hud { top: 170px; height: 80px; }
+.landscape #hud { top: 34px; height: 64px; }
+#hud-brand { position: absolute; font-size: 34px; font-weight: 500; color: var(--dim); letter-spacing: .06em; }
+.portrait #hud-brand { left: 64px; top: -82px; }
+.landscape #hud-brand { left: 60px; top: 14px; }
+#hud-title {
+  display: flex; align-items: center; gap: 16px; padding: 14px 34px; border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, .22); background: rgba(10, 10, 16, .55);
+  font-size: 38px; font-weight: 900; white-space: nowrap;
+}
+#hud-title i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+#hud-title em { font-style: normal; font-weight: 500; color: var(--accent); font-size: 32px; }
+#hud-title em:empty { display: none; }
+
+/* ---------- 字幕 ---------- */
+#subs { position: absolute; left: 40px; right: 40px; display: flex; justify-content: center; text-align: center; }
+.portrait #subs { top: 1360px; }
+.landscape #subs { top: 870px; }
+.sub {
+  font-weight: 900; line-height: 1.3; color: #fff; white-space: nowrap;
+  -webkit-text-stroke: 12px #000; paint-order: stroke fill;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, .8);
+}
+.portrait .sub { font-size: 64px; }
+.landscape .sub { font-size: 54px; }
+.sub .hl { -webkit-text-stroke: 12px #000; }
+
+/* ---------- 进度条 ---------- */
+#progress { position: absolute; display: flex; gap: 10px; }
+.portrait #progress { left: 120px; right: 120px; top: 1530px; height: 8px; }
+.landscape #progress { left: 60px; right: 60px; bottom: 34px; height: 6px; }
+.seg { position: relative; height: 100%; border-radius: 4px; background: rgba(255, 255, 255, .16); overflow: hidden; }
+.seg b { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: var(--accent); box-shadow: 0 0 12px var(--glow); transform-origin: left center; }
+
+/* ---------- 封面 ---------- */
+#cover { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 50px; text-align: center; }
+.cover-title { font-weight: 900; line-height: 1.18; }
+.cover-sub { font-size: 50px; font-weight: 500; color: var(--dim); }
+.cover-line { width: 160px; height: 6px; background: var(--accent); box-shadow: 0 0 18px var(--glow); border-radius: 3px; }

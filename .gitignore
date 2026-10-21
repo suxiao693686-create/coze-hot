@@ -1,0 +1,4 @@
+# 黑底白线讲解视频：成片、缓存不提交
+explainer-video/output/
+explainer-video/.cache/
+__pycache__/
