@@ -431,7 +431,7 @@
       }
       case 'pop':
         e.style.opacity = clamp(p * 2.5);
-        e.style.transform = p < 1 ? `scale(${0.55 + 0.45 * E.back(p)})` : 'none';
+        e.style.transform = p < 1 ? `scale(${0.55 + 0.45 * E.back(p)})` : `translateY(${Math.sin(t * 1.6 + r.seed) * 6}px)`;
         break;
       case 'show':
         e.style.opacity = E.out(p);
@@ -484,7 +484,7 @@
   }
 
   function buildScene(sc, idx) {
-    const root = h('div', 'scene', document.getElementById('scenes'));
+    const root = h('div', 'scene', world);
     const inner = h('div', 'inner', root);
     const reveals = [];
     const R = {
@@ -498,9 +498,156 @@
         return r;
       },
     };
+    // 任何场景都可以有 kicker（上方小标题，如"机关 01"），headline 自己处理
+    if (sc.kicker && sc.type !== 'headline') R.add('fade', h('div', 'kicker', inner, sc.kicker), 0, 0.45);
     (B[sc.type] || B.headline)(sc, inner, R);
-    root.style.display = 'none';
     return { sc, root, inner, reveals, start: sc.start, end: sc.end };
+  }
+
+  // ---------- 一镜到底：所有场景摆在一张大画布上，镜头沿着一条线从一场移到下一场 ----------
+  const TR = 0.8;                      // 换场时镜头移动的时长（秒），一半在上一场末尾，一半在下一场开头
+  let world, thread, fxCtx, A, BOX, STEP, links = [];
+
+  function layout() {
+    BOX = P ? { w: 960, h: 1000 } : { w: 1640, h: 690 };
+    A = P ? { x: W / 2, y: 800 } : { x: W / 2, y: 465 };   // 屏幕上放内容中心的位置
+    STEP = P ? 1450 : 2150;
+    built.forEach((b, i) => {
+      b.cx = P ? A.x + (i ? 230 * Math.sin(i * 2.1) : 0) : A.x + i * STEP;
+      b.cy = P ? A.y + i * STEP : A.y + (i ? 160 * Math.sin(i * 1.7) : 0);
+      Object.assign(b.root.style, { left: b.cx - BOX.w / 2 + 'px', top: b.cy - BOX.h / 2 + 'px', width: BOX.w + 'px', height: BOX.h + 'px' });
+    });
+  }
+
+  // 量出每场内容的实际边界，串联线接在内容边上；关键词的位置留给爆闪特效
+  function contentBox(b) {
+    let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+    for (const c of b.inner.children) {
+      const r = c.getBoundingClientRect();
+      if (!r.width) continue;
+      x1 = Math.min(x1, r.left); y1 = Math.min(y1, r.top); x2 = Math.max(x2, r.right); y2 = Math.max(y2, r.bottom);
+    }
+    return x1 < 1e9 ? { x1, y1, x2, y2 } : { x1: b.cx - 100, y1: b.cy - 100, x2: b.cx + 100, y2: b.cy + 100 };
+  }
+
+  function measure() {
+    world.style.transform = 'none';
+    built.forEach(b => {
+      let bx = contentBox(b);
+      // 内容超出画框就整体缩小
+      const k = Math.min(1, BOX.w / (bx.x2 - bx.x1), BOX.h / (bx.y2 - bx.y1));
+      if (k < 1) {
+        b.inner.style.transform = `scale(${k * 0.97})`;
+        bx = contentBox(b);
+      }
+      b.bounds = bx;
+      for (const r of b.reveals) {
+        if (r.kind !== 'glitch') continue;
+        const q = r.el.getBoundingClientRect();
+        Object.assign(r, { cx: q.left + q.width / 2, cy: q.top + q.height / 2, w: q.width, h: q.height });
+      }
+    });
+  }
+
+  function buildThread() {
+    for (let i = 0; i + 1 < built.length; i++) {
+      const a = built[i], b = built[i + 1];
+      let p0, p1, d;
+      if (P) {
+        p0 = [(a.bounds.x1 + a.bounds.x2) / 2, a.bounds.y2 + 60];
+        p1 = [(b.bounds.x1 + b.bounds.x2) / 2, b.bounds.y1 - 60];
+        const my = (p0[1] + p1[1]) / 2;
+        d = `M${p0} C${p0[0]},${my} ${p1[0]},${my} ${p1}`;
+      } else {
+        p0 = [a.bounds.x2 + 70, (a.bounds.y1 + a.bounds.y2) / 2];
+        p1 = [b.bounds.x1 - 70, (b.bounds.y1 + b.bounds.y2) / 2];
+        const mx = (p0[0] + p1[0]) / 2;
+        d = `M${p0} C${mx},${p0[1]} ${mx},${p1[1]} ${p1}`;
+      }
+      const g = s('g', {}, thread);
+      const base = s('path', { d, class: 'thread' }, g);
+      const len = base.getTotalLength();
+      const n0 = s('circle', { cx: p0[0], cy: p0[1], r: 8, class: 'thread-node' }, g);
+      const n1 = s('circle', { cx: p1[0], cy: p1[1], r: 8, class: 'thread-node' }, g);
+      const head = s('circle', { r: 10, class: 'thread-head' }, g);
+      const pts = [];
+      for (let k = 0; k <= 80; k++) { const q = base.getPointAtLength((len * k) / 80); pts.push([q.x, q.y]); }
+      links.push({ base, len, n0, n1, head, pts, t: a.end });
+    }
+  }
+
+  function updateThread(t) {
+    for (const L of links) {
+      const q = clamp((t - (L.t - TR * 0.5)) / (TR * 0.9));
+      const e = E.inOut(q);
+      L.base.style.strokeDasharray = `${L.len} ${L.len}`;
+      L.base.style.strokeDashoffset = L.len * (1 - e);
+      // 画完之后慢慢变淡，留一条细细的来路
+      const fade = 1 - 0.65 * clamp((t - (L.t + TR * 0.5)) / 1.2);
+      L.base.style.opacity = fade;
+      L.n0.style.opacity = q > 0 ? fade : 0;
+      L.n1.style.opacity = q >= 1 ? fade : 0;
+      const on = q > 0 && q < 1;
+      L.head.style.opacity = on ? 1 : 0;
+      if (on) {
+        const f = e * 80, k = Math.min(79, Math.floor(f)), u = f - k;
+        L.head.setAttribute('cx', L.pts[k][0] + (L.pts[k + 1][0] - L.pts[k][0]) * u);
+        L.head.setAttribute('cy', L.pts[k][1] + (L.pts[k + 1][1] - L.pts[k][1]) * u);
+      }
+    }
+  }
+
+  // 镜头位置：停留时缓慢推近，换场时沿线滑到下一场，中途稍微拉远，让人看到两场之间的联系
+  function camera(t) {
+    const n = built.length, pre = TR * 0.5;
+    let i = built.findIndex(b => t < b.end);
+    if (i < 0) i = n - 1;
+    const zoomAt = (b, tt) => 1 + 0.035 * E.inOut(clamp((tt - b.start) / (b.end - b.start)));
+    const b = built[i];
+    let from = b, to = null, p = 0;
+    if (i + 1 < n && t > b.end - pre) { to = built[i + 1]; p = (t - (b.end - pre)) / TR; }
+    else if (i > 0 && t < b.start + TR - pre) { from = built[i - 1]; to = b; p = (t - (b.start - pre)) / TR; }
+    const dx = 6 * Math.sin(t * 0.5), dy = 5 * Math.cos(t * 0.37);
+    if (!to) return { x: b.cx + dx, y: b.cy + dy, z: zoomAt(b, t), i };
+    const e = E.inOut(clamp(p));
+    return {
+      x: from.cx + (to.cx - from.cx) * e + dx,
+      y: from.cy + (to.cy - from.cy) * e + dy,
+      z: (zoomAt(from, t) + (zoomAt(to, t) - zoomAt(from, t)) * e) * (1 - 0.15 * Math.sin(Math.PI * clamp(p))),
+      i: p > 0.5 ? built.indexOf(to) : built.indexOf(from),
+    };
+  }
+
+  // 关键词闪入时，周围迸出一圈光线
+  function drawFx(t, cam, ox, oy) {
+    const c = fxCtx;
+    c.clearRect(0, 0, W, H);
+    c.lineCap = 'round';
+    for (let j = Math.max(0, cam.i - 1); j <= Math.min(built.length - 1, cam.i + 1); j++) {
+      const b = built[j];
+      for (const r of b.reveals) {
+        if (r.kind !== 'glitch' || r.cx == null) continue;
+        const life = (t - b.start - r.at - r.dur * 0.6) / 0.55;
+        if (life < 0 || life > 1) continue;
+        const e = E.out(life), x = ox + r.cx * cam.z, y = oy + r.cy * cam.z;
+        const rx = (r.w / 2 + 30) * cam.z, ry = (r.h / 2 + 30) * cam.z;
+        const rnd = rng(r.seed + 3);
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2 + rnd() * 0.3;
+          const ca = Math.cos(a), sa = Math.sin(a);
+          const r0 = 1 + 0.35 * e, len = (26 + rnd() * 30) * (1 - e) + 4;
+          const x0 = x + ca * rx * r0, y0 = y + sa * ry * r0;
+          c.globalAlpha = (1 - life) * 0.9;
+          c.strokeStyle = k % 2 ? '#ffffff' : V.accent;
+          c.lineWidth = 4;
+          c.beginPath();
+          c.moveTo(x0, y0);
+          c.lineTo(x0 + ca * len, y0 + sa * len);
+          c.stroke();
+        }
+      }
+    }
+    c.globalAlpha = 1;
   }
 
   // ---------- 背景 ----------
@@ -510,7 +657,7 @@
     const n = parseInt(m.length === 3 ? m.replace(/./g, '$&$&') : m, 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
-  function drawBg(t) {
+  function drawBg(t, sx = 0, sy = 0) {
     const c = bgCtx;
     c.globalAlpha = 1;
     c.fillStyle = '#040407';
@@ -542,17 +689,18 @@
     } else if (V.bg !== 'none') {
       c.fillStyle = '#fff';
       for (const st of stars) {
-        const y = (((st.y - t * 0.006 * st.z) % 1) + 1) % 1;
+        const y = (((st.y - t * 0.006 * st.z - (sy * 0.12 * st.z) / H) % 1) + 1) % 1;
+        const x = (((st.x - (sx * 0.12 * st.z) / W) % 1) + 1) % 1;
         const a = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * (0.7 + st.z * 1.5) + st.ph));
         c.globalAlpha = a * st.z;
         const r = st.big ? 2.4 : 0.7 + st.z * 1.3;
         c.beginPath();
-        c.arc(st.x * W, y * H, r, 0, Math.PI * 2);
+        c.arc(x * W, y * H, r, 0, Math.PI * 2);
         c.fill();
         if (st.big) {
           c.globalAlpha = a * 0.35;
-          c.fillRect(st.x * W - 10, y * H - 0.6, 20, 1.2);
-          c.fillRect(st.x * W - 0.6, y * H - 10, 1.2, 20);
+          c.fillRect(x * W - 10, y * H - 0.6, 20, 1.2);
+          c.fillRect(x * W - 0.6, y * H - 10, 1.2, 20);
         }
       }
     }
@@ -627,35 +775,43 @@
     });
     subEl = document.querySelector('#subs .sub');
     flashEl = document.getElementById('flash');
+    world = document.getElementById('world');
+    thread = document.getElementById('thread');
+    const fx = document.getElementById('fx');
+    fx.width = W;
+    fx.height = H;
+    fxCtx = fx.getContext('2d');
     built = V.scenes.map(buildScene);
+    layout();
+    measure();
+    buildThread();
     buildCover();
   };
 
   window.seek = t => {
-    drawBg(t);
-    const last = built[built.length - 1];
-    let flash = 0;
-    for (const b of built) {
-      const on = (t >= b.start && t < b.end) || (b === last && t >= b.end);
-      b.root.style.display = on ? '' : 'none';
-      if (!on) continue;
-      const d = b.end - b.start, tl = Math.min(t - b.start, d);
-      const pin = E.out(clamp(tl / 0.28));
-      const pout = b === last ? 1 : clamp((d - tl) / 0.18);
-      b.root.style.opacity = Math.min(pin, pout);
-      const blur = (1 - pin) * 10;
-      b.root.style.filter = blur > 0.05 ? `blur(${blur}px)` : 'none';
-      let sx = 0, sy = 0;
-      if (b.sc.impact && tl < 0.45) {
-        const k = 1 - tl / 0.45, f = Math.floor(t * 30);
-        sx = (hash(f * 3 + 1) - 0.5) * 34 * k;
-        sy = (hash(f * 5 + 2) - 0.5) * 34 * k;
-        flash = Math.max(flash, 0.5 * clamp(1 - tl / 0.22));
-      }
-      const sc = (0.965 + 0.035 * pin) * (1 + (1 - pout) * 0.05) * (1 + 0.035 * E.inOut(clamp(tl / d)));
-      b.inner.style.transform = `translate(${sx}px,${sy}px) scale(${sc})`;
-      for (const r of b.reveals) applyReveal(r, tl, t);
+    const cam = camera(t);
+    let sx = 0, sy = 0, flash = 0;
+    const cur = built[cam.i];
+    const tl0 = t - cur.start;
+    if (cur.sc.impact && tl0 >= 0 && tl0 < 0.45) {
+      const k = 1 - tl0 / 0.45, f = Math.floor(t * 30);
+      sx = (hash(f * 3 + 1) - 0.5) * 34 * k;
+      sy = (hash(f * 5 + 2) - 0.5) * 34 * k;
+      flash = 0.5 * clamp(1 - tl0 / 0.22);
     }
+    const ox = A.x - cam.x * cam.z + sx, oy = A.y - cam.y * cam.z + sy;
+    world.style.transform = `translate(${ox}px,${oy}px) scale(${cam.z})`;
+    drawBg(t, cam.x - built[0].cx, cam.y - built[0].cy);
+    built.forEach((b, j) => {
+      const vis = Math.abs(j - cam.i) <= 1;
+      b.root.style.display = vis ? '' : 'none';
+      if (!vis) return;
+      const dist = P ? Math.abs(cam.y - b.cy) / STEP : Math.abs(cam.x - b.cx) / STEP;
+      b.root.style.opacity = Math.max(0.08, 1 - 1.5 * dist);
+      for (const r of b.reveals) applyReveal(r, t - b.start, t);
+    });
+    updateThread(t);
+    drawFx(t, cam, ox, oy);
     flashEl.style.opacity = flash;
     updateSubs(t);
     updateHud(t);
@@ -675,8 +831,7 @@
   }
   window.showCover = () => {
     drawBg(3);
-    built.forEach(b => (b.root.style.display = 'none'));
-    for (const id of ['subs', 'progress', 'hud']) document.getElementById(id).style.display = 'none';
+    for (const id of ['world', 'fx', 'subs', 'progress', 'hud']) document.getElementById(id).style.display = 'none';
     flashEl.style.opacity = 0;
     document.getElementById('cover').style.display = 'flex';
   };

@@ -95,12 +95,12 @@ async def _shot(page, cdp, t, fmt="jpeg"):
 async def _worker(browser, video, fonts, frames, out, fps):
     page, cdp = await _open(browser, video, fonts)
     ff = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-v", "error", "-y", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", str(fps), "-i", "-",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", str(out),
+        "ffmpeg", "-v", "error", "-y", "-f", "image2pipe", "-c:v", "png", "-framerate", str(fps), "-i", "-",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-tune", "animation", "-pix_fmt", "yuv420p", str(out),
         stdin=asyncio.subprocess.PIPE,
     )
     for i in frames:
-        ff.stdin.write(await _shot(page, cdp, i / fps))
+        ff.stdin.write(await _shot(page, cdp, i / fps, "png"))
         await ff.stdin.drain()
     ff.stdin.close()
     if await ff.wait() != 0:

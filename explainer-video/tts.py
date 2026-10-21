@@ -170,7 +170,7 @@ class TTS:
             audio = decode(mp3)
         elif engine == "google":
             _google(text, mp3)
-            audio = decode(mp3, tempo=1.12 * _rate_factor(self.rate))
+            audio = decode(mp3, tempo=_rate_factor(self.rate))
         else:
             raise ValueError(engine)
         if len(audio) < SR * 0.2:
@@ -187,7 +187,7 @@ class TTS:
         order = [self.used] if self.used else (["edge", "google"] if self.engine == "auto" else [self.engine])
         last_err = None
         for eng in order:
-            key = hashlib.md5(json.dumps([eng, self.voice, self.rate, text]).encode()).hexdigest()[:16]
+            key = hashlib.md5(json.dumps([2, eng, self.voice, self.rate, text]).encode()).hexdigest()[:16]
             base = os.path.join(self.cache, key)
             try:
                 if os.path.exists(base + ".npy"):

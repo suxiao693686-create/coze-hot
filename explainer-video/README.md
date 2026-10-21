@@ -3,6 +3,8 @@
 给一个主题，自动做出一条讲解短视频：
 
 - **画风固定**：黑底星空，白色线条图标一笔一笔画出来，重点词紫色发光，底部大字幕，顶部标题和进度条
+- **一镜到底**：所有画面排在一张大画布上，镜头顺着一条发光的线滑到下一个画面，不是一页一页翻
+- **配乐**：真钢琴采样 + 鼓 + 铺底，按"钩子 / 解释 / 结尾"现场编曲，换场卡在节拍上；也可以换成你自己的音乐
 - **结构固定**：钩子（3 秒抓住人）→ 解释（一二三讲清楚）→ 结尾（金句 + 关注 + 下期预告）
 - **全自动**：查资料、写稿、配音、字幕、音效、封面一次出齐
 
@@ -45,7 +47,8 @@ Claude 会按 [`.claude/skills/explainer-video/SKILL.md`](../.claude/skills/expl
 | 黑底、白色线条、一笔一笔画出 | 强调色：紫 / 青 / 金 / 红 / 绿 |
 | 重点词发光、故障风闪入 | 背景：星空 / 点阵波浪 / 纯黑 |
 | 字幕大字白色黑描边 | 竖屏 9:16 / 横屏 16:9 |
-| 钩子 → 解释 → 结尾 | 账号名、音色、语速、要不要背景音 |
+| 钩子 → 解释 → 结尾 | 账号名、音色、语速 |
+| 一镜到底的镜头 | 配乐：舒缓 / 悬疑 / 轻快 / 你自己的音乐 |
 
 建议同一个账号固定一套账号名、强调色、背景和音色，看多了观众一眼就能认出你。
 
@@ -61,6 +64,12 @@ Claude 会按 [`.claude/skills/explainer-video/SKILL.md`](../.claude/skills/expl
 
 **在自己电脑上用**：一般直接就能用微软的声音。
 
+## 关于配乐
+
+默认每条视频现场编一段曲子：真钢琴（Salamander 大钢琴采样）+ 鼓 + 合成铺底和贝斯。开场有电影感的重低音，进正文前一个反向镲，正文鼓和贝斯进来，结尾鼓停只留钢琴。跟 Claude 说"配乐换成悬疑的 / 轻快的"就行。
+
+**想要更好听**：用你自己的音乐。剪映曲库、Suno 生成的都可以，把文件放进仓库，跟 Claude 说"配乐用 music/xxx.mp3"。程序会自动循环、淡入淡出，说话时把音乐压低。
+
 ## 在自己电脑上运行
 
 需要先装好 Python 3.9+ 和 ffmpeg（Mac：`brew install ffmpeg`；Windows：`winget install ffmpeg`），然后：
@@ -72,7 +81,7 @@ python3 -m playwright install chromium     # 装一个给程序用的浏览器�
 python3 make_video.py examples/刷短视频停不下来.json
 ```
 
-Windows 上把 `python3` 换成 `python`。第一次运行会自动下载思源黑体（约 20MB），下载不了就用系统自带的中文字体。
+Windows 上把 `python3` 换成 `python`。第一次运行会自动下载思源黑体（约 20MB）和乐器采样（约 40MB），以后就不用再下载了。字体下载不了会用系统自带的中文字体。
 
 ## 手动命令
 
@@ -101,7 +110,9 @@ python3 make_video.py icons brain money sleep       # 查图标（英文关键�
 explainer-video/
 ├── make_video.py      主程序：检查脚本 → 配音 → 时间轴 → 截图 → 混音 → 出片
 ├── tts.py             配音（edge / google / none）和字幕对时
-├── sound.py           背景氛围音、转场音效、混音
+├── music.py           配乐：按段落编曲（钢琴 / 鼓 / 贝斯 / 铺底）
+├── sound.py           人声处理、音效、混音
+├── assets.py          第一次运行时下载乐器采样
 ├── render.py          用无头浏览器逐帧截图、压成视频
 ├── renderer/          画面引擎（HTML + JS），所有场景类型都在 engine.js
 ├── examples/          示例脚本
@@ -113,4 +124,6 @@ explainer-video/
 
 - 图标：[Lucide](https://lucide.dev)（ISC 许可，见 `renderer/LICENSE-lucide.txt`）
 - 字体：思源黑体 Noto Sans SC（SIL OFL 许可），运行时自动下载
+- 钢琴：Salamander Grand Piano V3，作者 Alexander Holm（CC BY 3.0），运行时自动下载
+- 鼓和音效：Sonic Pi 采样库（CC0 公有领域），运行时自动下载
 - 风格参考了 [anything2explainer](https://github.com/Vincentwei1021/anything2explainer) 的黑底白线讲解风，这里的代码是重新写的、更轻量的版本

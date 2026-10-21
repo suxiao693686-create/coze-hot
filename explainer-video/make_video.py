@@ -23,6 +23,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
@@ -33,9 +35,9 @@ TYPES = {
 }
 ITEM_SCENES = {"icons", "flow", "cycle", "list", "bars", "compare"}
 SUB_MAX = 16          # 每条字幕最多字数
-LEAD = 0.15           # 画面先出现，配音稍后开口
-TAIL = 0.35           # 一场戏说完后多停一会儿
-LAST_TAIL = 1.6       # 最后一场多停一会儿
+LEAD = 0.12           # 镜头先到，配音稍后开口
+TAIL = 0.25           # 一场戏说完后留一口气
+LAST_TAIL = 1.8       # 最后一场多停一会儿
 
 
 def load_icons():
@@ -126,8 +128,17 @@ def check(script):
     return errs, warns
 
 
+def music_mode(script):
+    m = script.get("music", "chill")
+    return "chill" if m is True else (m or None)
+
+
 def build_timeline(script, tts, fps=30):
-    """配音 → 每场戏的时长、每句字幕的时间、音效位置"""
+    """配音 → 每场戏的时长、每句字幕的时间、音效位置。换场时间卡在配乐的节拍上。"""
+    import music
+    mode = music_mode(script)
+    bpm = script.get("bgm_bpm") if script.get("bgm") else (music.bpm_of(mode) if mode else None)
+    beat = 60 / bpm if bpm else None
     W, H = (1080, 1920) if script.get("format", "9:16") == "9:16" else (1920, 1080)
     scenes, subs, sections, voices, sfx = [], [], [], [], []
     keywords = script.get("keywords", [])
@@ -139,8 +150,12 @@ def build_timeline(script, tts, fps=30):
         audio, dur, times = tts.say(say)
         last = idx == len(all_sc) - 1
         hold = sc.get("hold", LAST_TAIL if last else TAIL)
-        length = max(1.6, LEAD + dur + hold)
-        length = round(length * fps) / fps
+        end = t + max(1.6, LEAD + dur + hold)
+        if beat and not last:
+            # 段落之间卡整拍，其余卡半拍
+            q = beat if all_sc[idx + 1][0] != si else beat / 2
+            end = np.ceil(end / q - 0.15) * q
+        length = round((end - t) * fps) / fps
         lines = [{"text": sub_text(x), "start": LEAD + a, "end": LEAD + b} for x, (a, b) in zip(say, times)]
         item = dict(sc, start=t, end=t + length, lines=lines, section=si)
         item.pop("say", None)
@@ -150,14 +165,16 @@ def build_timeline(script, tts, fps=30):
         for i, ln in enumerate(lines):
             end = lines[i + 1]["start"] if i + 1 < len(lines) else min(length - 0.12, ln["end"] + 0.6)
             subs.append({"text": ln["text"], "start": t + ln["start"], "end": t + end, "hl": hl})
-        # 音效：开场重击 / 换场嗖一声 / 列表逐项出现时轻点
+        # 音效：开场重击 / 镜头移动时嗖一声 / 列表逐项出现时轻点
         if idx == 0 or sc.get("impact"):
             sfx.append((t, "boom"))
-        else:
-            sfx.append((max(0, t - 0.12), "whoosh"))
+        if idx > 0:
+            sfx.append((max(0, t - 0.22), "swoosh"))
         if sc.get("type") in ITEM_SCENES:
             for ln in lines[1:]:
-                sfx.append((t + ln["start"] - 0.05, "tick"))
+                sfx.append((t + ln["start"] - 0.05, "pop"))
+        if sc.get("type") == "number":
+            sfx.append((t + 1.35, "ping"))
         t += length
     for si, sec in enumerate(script["sections"]):
         mine = [s for s in scenes if s["section"] == si]
@@ -234,7 +251,7 @@ def main():
     (out / "narration.txt").write_text("\n".join(s["text"] for s in video["subtitles"]), encoding="utf-8")
 
     print("② 截图总览 + 封面")
-    times = [max(s["start"] + 0.5, s["end"] - 0.3) for s in video["scenes"]]
+    times = [max(s["start"] + 0.6, s["end"] - 0.55) for s in video["scenes"]]
     stills = [out / f"_s{i:02d}.png" for i in range(len(times))]
     render.render_stills(video, times, stills, out / "cover.png")
     render.contact_sheet(stills, out / "contact.png")
@@ -244,8 +261,12 @@ def main():
         print(f"预览完成：{out / 'contact.png'}  （{time.time() - t0:.0f} 秒）")
         return
 
-    print("③ 混音")
-    audio = sound.mix(video["duration"], voices, sfx, music=not a.no_music and script.get("music", True))
+    print("③ 配乐和混音")
+    bgm = script.get("bgm")
+    if bgm and not Path(bgm).is_absolute():
+        bgm = str(Path(a.script).resolve().parent / bgm)
+    secs = [(s["name"], s["start"], s["end"]) for s in video["sections"]]
+    audio = sound.mix(video["duration"], voices, sfx, secs, None if a.no_music else music_mode(script), bgm)
     sound.write_wav(out / "audio.wav", audio)
 
     print(f"④ 渲染画面（{int(video['duration'] * a.fps)} 帧，{a.workers} 路并行）")
